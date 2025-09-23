@@ -22,13 +22,14 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { styled } from '@mui/material/styles';
 import { JobFilters as JobFiltersType } from '../../types';
+import { useJobDiscoveryStore } from '../../store/jobDiscoveryStore';
 import { ProfessionalCategory, UrgencyLevel } from '../../types/enums';
 import { formatCurrency } from '../../utils/formatters';
 
 interface JobFiltersProps {
-  filters: JobFiltersType;
-  onFiltersChange: (filters: Partial<JobFiltersType>) => void;
-  onClearFilters: () => void;
+  filters?: JobFiltersType;
+  onFiltersChange?: (filters: Partial<JobFiltersType>) => void;
+  onClearFilters?: () => void;
 }
 
 const FilterSection = styled(Box)(({ theme }) => ({
@@ -67,31 +68,39 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
   onFiltersChange,
   onClearFilters
 }) => {
+  // Fallback to discovery store if props are not provided
+  const { filters: storeFilters, setFilters: storeSetFilters, clearFilters: storeClearFilters } = useJobDiscoveryStore();
+  const effectiveFilters = filters || storeFilters;
+  const applyFilters = onFiltersChange || storeSetFilters;
+  const clearAll = onClearFilters || storeClearFilters;
   const handleCategoryChange = (category: ProfessionalCategory, checked: boolean) => {
+    const current = effectiveFilters?.categories || [];
     const newCategories = checked
-      ? [...filters.categories, category]
-      : filters.categories.filter(c => c !== category);
-    onFiltersChange({ categories: newCategories });
+      ? [...current, category]
+      : current.filter(c => c !== category);
+    applyFilters({ categories: newCategories });
   };
 
   const handleUrgencyChange = (urgency: UrgencyLevel, checked: boolean) => {
+    const current = effectiveFilters?.urgency || [];
     const newUrgency = checked
-      ? [...filters.urgency, urgency]
-      : filters.urgency.filter(u => u !== urgency);
-    onFiltersChange({ urgency: newUrgency });
+      ? [...current, urgency]
+      : current.filter(u => u !== urgency);
+    applyFilters({ urgency: newUrgency });
   };
 
   const handleBudgetChange = (event: Event, newValue: number | number[]) => {
     const [min, max] = newValue as number[];
-    onFiltersChange({
+    applyFilters({
       budgetRange: { min, max }
     });
   };
 
   const handleDateRangeChange = (field: 'start' | 'end', date: Date | null) => {
-    onFiltersChange({
+    const current = effectiveFilters?.dateRange || { start: '', end: '' };
+    applyFilters({
       dateRange: {
-        ...filters.dateRange,
+        ...current,
         [field]: date ? date.toISOString() : ''
       }
     });
@@ -99,10 +108,12 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.categories.length > 0) count += filters.categories.length;
-    if (filters.urgency.length > 0) count += filters.urgency.length;
-    if (filters.budgetRange.min > 0 || filters.budgetRange.max < 100000) count++;
-    if (filters.dateRange.start || filters.dateRange.end) count++;
+    const f = effectiveFilters;
+    if (!f) return 0;
+    if ((f.categories?.length || 0) > 0) count += f.categories.length;
+    if ((f.urgency?.length || 0) > 0) count += f.urgency.length;
+    if ((f.budgetRange?.min ?? 0) > 0 || (f.budgetRange?.max ?? 100000) < 100000) count++;
+    if ((f.dateRange?.start) || (f.dateRange?.end)) count++;
     return count;
   };
 
@@ -117,7 +128,7 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
             {activeFiltersCount > 0 && `${activeFiltersCount} filter${activeFiltersCount > 1 ? 's' : ''} applied`}
           </Typography>
           {activeFiltersCount > 0 && (
-            <Button size="small" onClick={onClearFilters}>
+            <Button size="small" onClick={clearAll}>
               Clear All
             </Button>
           )}
@@ -137,7 +148,7 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
                   key={option.value}
                   control={
                     <Checkbox
-                      checked={filters.categories.includes(option.value)}
+                      checked={(effectiveFilters?.categories || []).includes(option.value)}
                       onChange={(e) => handleCategoryChange(option.value, e.target.checked)}
                     />
                   }
@@ -161,11 +172,11 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
                 <Chip
                   key={option.value}
                   label={option.label}
-                  variant={filters.urgency.includes(option.value) ? 'filled' : 'outlined'}
-                  color={filters.urgency.includes(option.value) ? 'primary' : 'default'}
+                  variant={(effectiveFilters?.urgency || []).includes(option.value) ? 'filled' : 'outlined'}
+                  color={(effectiveFilters?.urgency || []).includes(option.value) ? 'primary' : 'default'}
                   onClick={() => handleUrgencyChange(
                     option.value,
-                    !filters.urgency.includes(option.value)
+                    !(effectiveFilters?.urgency || []).includes(option.value)
                   )}
                   sx={{ cursor: 'pointer' }}
                 />
@@ -185,7 +196,7 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
             <Stack spacing={2}>
               <Box sx={{ px: 2 }}>
                 <BudgetSlider
-                  value={[filters.budgetRange.min, filters.budgetRange.max]}
+                  value={[(effectiveFilters?.budgetRange?.min ?? 0), (effectiveFilters?.budgetRange?.max ?? 100000)]}
                   onChange={handleBudgetChange}
                   valueLabelDisplay="auto"
                   valueLabelFormat={(value) => formatCurrency(value)}
@@ -196,10 +207,10 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
               </Box>
               <Stack direction="row" justifyContent="space-between">
                 <Typography variant="body2">
-                  {formatCurrency(filters.budgetRange.min)}
+                  {formatCurrency(effectiveFilters?.budgetRange?.min ?? 0)}
                 </Typography>
                 <Typography variant="body2">
-                  {formatCurrency(filters.budgetRange.max)}
+                  {formatCurrency(effectiveFilters?.budgetRange?.max ?? 100000)}
                 </Typography>
               </Stack>
             </Stack>
@@ -217,7 +228,7 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
             <Stack spacing={2}>
               <DatePicker
                 label="From Date"
-                value={filters.dateRange.start ? new Date(filters.dateRange.start) : null}
+                value={effectiveFilters?.dateRange?.start ? new Date(effectiveFilters.dateRange.start) : null}
                 onChange={(date) => handleDateRangeChange('start', date)}
                 slotProps={{
                   textField: { fullWidth: true, size: 'small' }
@@ -225,9 +236,9 @@ export const JobFilters: React.FC<JobFiltersProps> = ({
               />
               <DatePicker
                 label="To Date"
-                value={filters.dateRange.end ? new Date(filters.dateRange.end) : null}
+                value={effectiveFilters?.dateRange?.end ? new Date(effectiveFilters.dateRange.end) : null}
                 onChange={(date) => handleDateRangeChange('end', date)}
-                minDate={filters.dateRange.start ? new Date(filters.dateRange.start) : undefined}
+                minDate={effectiveFilters?.dateRange?.start ? new Date(effectiveFilters.dateRange.start) : undefined}
                 slotProps={{
                   textField: { fullWidth: true, size: 'small' }
                 }}
