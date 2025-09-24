@@ -298,3 +298,7 @@ export const mockRootProps = {
   showJobCreationWizard: false,
   selectedJobId: null
 };
+
+// Direct exports for easier importing
+export const mockJobs = mockQuery.nearbyJobs;
+export const mockMyJobs = mockQuery.myPostedJobs;
