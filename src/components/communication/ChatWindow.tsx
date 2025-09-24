@@ -12,6 +12,7 @@ import { MessageBubbleComponent } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { TypingIndicator } from './TypingIndicator';
 import { ContactShareModal } from './ContactShareModal';
+import { JobContextCard } from './JobContextCard';
 import { MessageData, OnlineStatus, ContactSharingStatus } from '../../types/communication';
 import { MessageType } from '../../types/enums';
 import { useCommunicationStore } from '../../store/communicationStore';
@@ -58,6 +59,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   
@@ -94,6 +97,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [conversationId, conversation, markConversationAsRead]);
 
   useEffect(() => {
+    // Initial page load if empty
+    if ((messages[conversationId] || []).length === 0) {
+      loadMore();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [conversationMessages]);
 
@@ -101,25 +112,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = (content: string, type: MessageType) => {
-    const newMessage: MessageData = {
-      id: `msg_${Date.now()}`,
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    const before = (messages[conversationId]?.[0]?.timestamp) || undefined;
+    const res = await useCommunicationStore.getState().fetchMessages(conversationId, { before, limit: 20 });
+    setHasMore(res.hasMore);
+    setIsLoadingMore(false);
+  };
+
+  const handleSendMessage = async (content: string, type: MessageType) => {
+    await useCommunicationStore.getState().sendMessage({
       conversationId,
       senderId: currentUser?.id || 'user_123',
       receiverId: professional?.id || '',
       content,
-      timestamp: new Date().toISOString(),
-      isRead: false,
-      type,
-      status: 'sending' as any
-    };
-
-    addMessage(newMessage);
-    
-    // Simulate message sending
-    setTimeout(() => {
-      // Update message status to sent/delivered
-    }, 1000);
+      type
+    });
   };
 
   const handleContactShare = () => {
@@ -216,7 +225,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       />
 
       {/* Messages */}
-      <MessagesContainer>
+      <MessagesContainer onScroll={(e: any) => {
+        const top = e.currentTarget.scrollTop;
+        if (top < 50) {
+          loadMore();
+        }
+      }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -224,6 +238,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         )}
 
         <Stack spacing={1}>
+          {conversation.jobId && (
+            <JobContextCard jobTitle={'Wedding Photography Project'} />
+          )}
           {conversationMessages.map((message, index) => {
             const isOwn = message.senderId === (currentUser?.id || 'user_123');
             const showAvatar = !isOwn && (
@@ -244,6 +261,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           })}
 
           {isUserTyping && <TypingIndicator userName={professional.name} />}
+          {isLoadingMore && (
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', my: 1 }}>
+              Loading earlier messages...
+            </Typography>
+          )}
           
           <div ref={messagesEndRef} />
         </Stack>

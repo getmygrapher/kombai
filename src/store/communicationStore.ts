@@ -5,10 +5,9 @@ import {
   MessageFilterType, 
   NotificationSound,
   OnlineStatus,
-  MessageStatus,
-  ContactSharingStatus
+  MessageStatus
 } from '../types/communication';
-import { MessageType } from '../types/enums';
+import { Notification } from '../types';
 import { useAppStore } from './appStore';
 
 interface CommunicationStore {
@@ -18,8 +17,10 @@ interface CommunicationStore {
   messages: Record<string, MessageData[]>;
   
   // Real-time state
-  activeTypingUsers: string[];
-  onlineUsers: string[];
+  activeTypingUsers: string[]; // legacy, derived from typingByConversation
+  onlineUsers: string[]; // legacy, derived from onlineStatusByUser
+  typingByConversation: Record<string, string[]>; // conversationId -> userIds typing
+  onlineStatusByUser: Record<string, OnlineStatus>; // userId -> status
   lastSeenTimestamps: Record<string, string>;
   
   // UI state
@@ -46,6 +47,7 @@ interface CommunicationStore {
   setTypingStatus: (userId: string, isTyping: boolean) => void;
   setOnlineStatus: (userId: string, status: OnlineStatus) => void;
   updateLastSeen: (userId: string, timestamp: string) => void;
+  setTypingStatusInConversation: (conversationId: string, userId: string, isTyping: boolean) => void;
   
   setMessageFilter: (filter: MessageFilterType) => void;
   setSearchQuery: (query: string) => void;
@@ -60,6 +62,13 @@ interface CommunicationStore {
   deleteConversation: (conversationId: string) => void;
   
   updateUnreadCount: () => void;
+
+  // Message lifecycle
+  sendMessage: (message: Omit<MessageData, 'id' | 'status' | 'timestamp' | 'isRead'> & { id?: string }) => Promise<{ ok: boolean; id: string }>;
+  retryMessage: (messageId: string) => Promise<{ ok: boolean }>;
+
+  // Pagination
+  fetchMessages: (conversationId: string, opts?: { before?: string; limit?: number }) => Promise<{ ok: boolean; hasMore: boolean }>;
 }
 
 export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
@@ -69,6 +78,8 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   messages: {},
   activeTypingUsers: [],
   onlineUsers: [],
+  typingByConversation: {},
+  onlineStatusByUser: {},
   lastSeenTimestamps: {},
   messageFilter: MessageFilterType.ALL,
   searchQuery: '',
@@ -112,6 +123,22 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
           }
         : conv
     );
+
+    // Push in-app notification for incoming messages when not muted
+    const notifications: Notification[] = [];
+    if (message.senderId !== currentUserId && !state.isNotificationMuted) {
+      notifications.push({
+        id: `notif_${message.id}`,
+        title: 'New message',
+        message: message.content,
+        timestamp: message.timestamp,
+        isRead: false,
+        type: 'message'
+      } as any);
+    }
+
+    // Emit notifications via app store
+    notifications.forEach(n => useAppStore.getState().addNotification(n));
 
     return {
       messages: updatedMessages,
@@ -187,6 +214,8 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   })),
   
   setOnlineStatus: (userId, status) => set((state) => ({
+    onlineStatusByUser: { ...state.onlineStatusByUser, [userId]: status },
+    // Keep legacy array in sync for backward compatibility
     onlineUsers: status === OnlineStatus.ONLINE
       ? [...state.onlineUsers.filter(id => id !== userId), userId]
       : state.onlineUsers.filter(id => id !== userId)
@@ -195,9 +224,28 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   updateLastSeen: (userId, timestamp) => set((state) => ({
     lastSeenTimestamps: { ...state.lastSeenTimestamps, [userId]: timestamp }
   })),
+
+  setTypingStatusInConversation: (conversationId, userId, isTyping) => set((state) => {
+    const existing = state.typingByConversation[conversationId] || [];
+    const next = isTyping
+      ? [...existing.filter(id => id !== userId), userId]
+      : existing.filter(id => id !== userId);
+    // Derive legacy flat array
+    const merged: Record<string, string[]> = { ...state.typingByConversation, [conversationId]: next };
+    const flattened: string[] = Object.values(merged).flatMap((ids: string[]) => ids);
+    const allTyping = new Set<string>(flattened);
+    return {
+      typingByConversation: { ...state.typingByConversation, [conversationId]: next },
+      activeTypingUsers: Array.from(allTyping)
+    };
+  }),
   
   setMessageFilter: (filter) => set({ messageFilter: filter }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  
+  // Simple preference: mute notifications
+  // Note: keeping function signature minimal to avoid breaking callers
+  // Consumers can call set({ isNotificationMuted: true }) directly if needed as well
   
   shareContact: (userId) => set((state) => ({
     contactSharedUsers: [...state.contactSharedUsers.filter(id => id !== userId), userId]
@@ -237,7 +285,79 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   updateUnreadCount: () => set((state) => {
     const totalUnread = state.conversations.reduce((total, conv) => total + conv.unreadCount, 0);
     return { unreadMessageCount: totalUnread };
-  })
+  }),
+
+  // Message lifecycle with optimistic updates and simulated network
+  sendMessage: async (input) => {
+    const currentUserId = useAppStore.getState().user?.id ?? 'user_123';
+    const tempId = input.id || `temp_${Date.now()}`;
+    const message: MessageData = {
+      id: tempId,
+      conversationId: input.conversationId,
+      senderId: input.senderId || currentUserId,
+      receiverId: input.receiverId,
+      content: input.content,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      type: input.type,
+      status: MessageStatus.SENDING
+    };
+
+    // Optimistically add
+    get().addMessage(message);
+
+    try {
+      // Simulate network latency and success/failure
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const succeed = true; // Replace with real API result
+      if (!succeed) throw new Error('failed');
+
+      // Mark as delivered
+      get().updateMessage(tempId, { status: MessageStatus.DELIVERED });
+      return { ok: true, id: tempId };
+    } catch (e) {
+      get().updateMessage(tempId, { status: MessageStatus.FAILED });
+      return { ok: false, id: tempId } as any;
+    }
+  },
+
+  retryMessage: async (messageId) => {
+    get().updateMessage(messageId, { status: MessageStatus.SENDING });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const succeed = true;
+      if (!succeed) throw new Error('failed');
+      get().updateMessage(messageId, { status: MessageStatus.DELIVERED });
+      return { ok: true };
+    } catch (e) {
+      get().updateMessage(messageId, { status: MessageStatus.FAILED });
+      return { ok: false };
+    }
+  }
+  ,
+
+  // Simple pagination against existing in-memory messages
+  fetchMessages: async (conversationId, opts) => {
+    const limit = opts?.limit ?? 20;
+    const before = opts?.before ? new Date(opts.before).getTime() : Number.POSITIVE_INFINITY;
+    const state = get();
+    const all = state.messages[conversationId] || [];
+    const older = all
+      .filter(m => new Date(m.timestamp).getTime() < before)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+    // Prepend older messages if not already in list (ids unique)
+    if (older.length > 0) {
+      set((s) => ({
+        messages: {
+          ...s.messages,
+          [conversationId]: [...older.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()), ...((s.messages[conversationId]) || [])]
+        }
+      }));
+    }
+    const remaining = all.filter(m => new Date(m.timestamp).getTime() < (older[older.length - 1]?.timestamp ? new Date(older[older.length - 1].timestamp).getTime() : before)).length;
+    return { ok: true, hasMore: remaining > 0 };
+  }
 }));
 
 // Ensure unread count stays consistent after key mutations
