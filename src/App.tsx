@@ -12,6 +12,10 @@ import { AppBottomNavigation } from './components/navigation/BottomNavigation';
 import { EnhancedHomePage } from './components/homepage/EnhancedHomePage';
 import { SearchPage } from './components/search/SearchPage';
 import { JobsPage } from './components/jobs/JobsPage';
+import { JobFeedPage } from './pages/jobs/JobFeedPage';
+import { JobDetailPage } from './pages/jobs/JobDetailPage';
+import { JobCreationPage } from './pages/jobs/JobCreationPage';
+import { JobManagementPage } from './pages/jobs/JobManagementPage';
 import { CalendarPage } from './components/calendar/CalendarPage';
 import { EnhancedMessagesPage } from './components/messages/EnhancedMessagesPage';
 import { ProfilePage } from './components/profile/ProfilePage';
@@ -374,10 +378,41 @@ const App: React.FC = () => {
               )
             } />
             
+            {/* Job Routes */}
             <Route path="/jobs" element={
               isAuthenticated ? (
                 <MainAppLayout currentTab="jobs" setCurrentTab={setCurrentTab}>
-                  <JobsPage />
+                  <JobFeedPage />
+                </MainAppLayout>
+              ) : (
+                <Navigate to="/welcome" replace />
+              )
+            } />
+            
+            <Route path="/jobs/new" element={
+              isAuthenticated ? (
+                <MainAppLayout currentTab="jobs" setCurrentTab={setCurrentTab}>
+                  <JobCreationPage />
+                </MainAppLayout>
+              ) : (
+                <Navigate to="/welcome" replace />
+              )
+            } />
+            
+            <Route path="/jobs/:jobId" element={
+              isAuthenticated ? (
+                <MainAppLayout currentTab="jobs" setCurrentTab={setCurrentTab}>
+                  <JobDetailPage />
+                </MainAppLayout>
+              ) : (
+                <Navigate to="/welcome" replace />
+              )
+            } />
+            
+            <Route path="/jobs/manage" element={
+              isAuthenticated ? (
+                <MainAppLayout currentTab="jobs" setCurrentTab={setCurrentTab}>
+                  <JobManagementPage />
                 </MainAppLayout>
               ) : (
                 <Navigate to="/welcome" replace />

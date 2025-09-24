@@ -26,12 +26,14 @@ import { formatJobDateTime, formatJobBudget, formatBudgetType } from '../../util
 import { StatusChip } from '../common/StatusChip';
 import { RatingDisplay } from '../common/RatingDisplay';
 import { DistanceIndicator } from '../common/DistanceIndicator';
+import { Job } from '../../types';
 
 interface JobDetailModalProps {
-  jobId: string;
+  job: Job;
   open: boolean;
   onClose: () => void;
-  onApply: (jobId: string) => void;
+  onApply?: (jobId: string) => void;
+  showCloseButton?: boolean;
 }
 
 const StyledDialog = styled(Dialog)(({ theme }) => ({
@@ -61,16 +63,16 @@ const PosterCard = styled(Box)(({ theme }) => ({
 }));
 
 export const JobDetailModal: React.FC<JobDetailModalProps> = ({
-  jobId,
+  job,
   open,
   onClose,
-  onApply
+  onApply,
+  showCloseButton = true
 }) => {
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
   const [proposedRate, setProposedRate] = useState('');
   
-  const { data: job, isLoading, error } = useJobDetails(jobId);
   const applyMutation = useApplyToJob();
 
   const handleApply = async () => {
@@ -78,43 +80,19 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     
     try {
       await applyMutation.mutateAsync({
-        jobId,
+        jobId: job.id,
         message: applicationMessage,
         proposedRate: proposedRate ? parseInt(proposedRate) : undefined
       });
-      onApply(jobId);
+      if (onApply) {
+        onApply(job.id);
+      }
       onClose();
     } catch (error) {
       console.error('Failed to apply:', error);
     }
   };
 
-  if (isLoading) {
-    return (
-      <StyledDialog open={open as any} onClose={onClose}>
-        <DialogContent>
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            Loading job details...
-          </Box>
-        </DialogContent>
-      </StyledDialog>
-    );
-  }
-
-  if (error || !job) {
-    return (
-      <StyledDialog open={open} onClose={onClose}>
-        <DialogContent>
-          <Alert severity="error">
-            Failed to load job details. Please try again.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Close</Button>
-        </DialogActions>
-      </StyledDialog>
-    );
-  }
 
   return (
     <StyledDialog open={open as any} onClose={onClose} maxWidth="md" fullWidth>
@@ -137,9 +115,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
               ))}
             </Stack>
           </Box>
-          <IconButton onClick={onClose} size="small">
-            <CloseIcon />
-          </IconButton>
+          {showCloseButton && (
+            <IconButton onClick={onClose} size="small">
+              <CloseIcon />
+            </IconButton>
+          )}
         </Stack>
       </DialogTitle>
 

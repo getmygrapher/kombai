@@ -9,12 +9,36 @@ import {
   Tabs,
   Tab,
   Chip,
+  Card,
+  CardContent,
+  IconButton,
+  Menu,
+  MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Divider,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import {
+  MoreVert,
+  Edit,
+  Delete,
+  Visibility,
+  People,
+  Close,
+  CheckCircle,
+  Schedule,
+  TrendingUp
+} from '@mui/icons-material';
 import { JobCard } from './JobCard';
 import { Job } from '../../types';
 import { JobStatus } from '../../types/enums';
 import { useMyJobs } from '../../hooks/useJobs';
+import { ApplicationStatusManager } from './ApplicationStatusManager';
+import { useApplicationStore } from '../../store/applicationStore';
 
 const TabPanel = (props: { children?: React.ReactNode; value: number; index: number }) => {
   const { children, value, index, ...other } = props;
@@ -34,6 +58,11 @@ const TabPanel = (props: { children?: React.ReactNode; value: number; index: num
 export const JobDashboard: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [showApplications, setShowApplications] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
 
   const {
     data: jobsData,
@@ -42,11 +71,69 @@ export const JobDashboard: React.FC = () => {
     refetch,
   } = useMyJobs();
 
+  const { getApplications } = useApplicationStore();
+
   useEffect(() => {
     if (jobsData?.jobs) {
       setJobs(jobsData.jobs);
     }
   }, [jobsData]);
+
+  const handleJobMenuOpen = (event: React.MouseEvent<HTMLElement>, job: Job) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedJob(job);
+  };
+
+  const handleJobMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedJob(null);
+  };
+
+  const handleViewApplications = () => {
+    setShowApplications(true);
+    handleJobMenuClose();
+  };
+
+  const handleEditJob = () => {
+    // TODO: Navigate to job edit page
+    console.log('Edit job:', selectedJob?.id);
+    handleJobMenuClose();
+  };
+
+  const handleDeleteJob = () => {
+    setJobToDelete(selectedJob);
+    setDeleteDialogOpen(true);
+    handleJobMenuClose();
+  };
+
+  const confirmDeleteJob = async () => {
+    if (jobToDelete) {
+      // TODO: Implement job deletion
+      console.log('Delete job:', jobToDelete.id);
+      setDeleteDialogOpen(false);
+      setJobToDelete(null);
+      refetch();
+    }
+  };
+
+  const handleCloseApplications = () => {
+    setShowApplications(false);
+    setSelectedJob(null);
+  };
+
+  const getJobStats = (job: Job) => {
+    const applications = getApplications(job.id);
+    const hiredCount = applications.filter(app => app.status === 'HIRED').length;
+    const pendingCount = applications.filter(app => app.status === 'PENDING').length;
+    const shortlistedCount = applications.filter(app => app.status === 'SHORTLISTED').length;
+    
+    return {
+      total: applications.length,
+      hired: hiredCount,
+      pending: pendingCount,
+      shortlisted: shortlistedCount
+    };
+  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
@@ -156,33 +243,162 @@ export const JobDashboard: React.FC = () => {
             </Box>
           ) : (
             <Stack spacing={2}>
-              {tab.jobs.map((job) => (
-                <Box key={job.id} sx={{ position: 'relative' }}>
-                  <Chip
-                    label={job.status}
-                    size="small"
-                    color={getStatusColor(job.status) as any}
-                    sx={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      zIndex: 1,
-                    }}
-                  />
-                  <JobCard
-                    job={job}
-                    showDistance={false as any}
-                    showApplicantCount={true as any}
-                    onViewDetails={handleJobDetails}
-                    onApply={handleJobEdit}
-                    actionLabel="Manage"
-                  />
-                </Box>
-              ))}
+              {tab.jobs.map((job) => {
+                const stats = getJobStats(job);
+                return (
+                  <Card key={job.id} sx={{ position: 'relative' }}>
+                    <CardContent>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                        <Box sx={{ flexGrow: 1 }}>
+                          <JobCard
+                            job={job}
+                            showDistance={false as any}
+                            showApplicantCount={true as any}
+                            onViewDetails={handleJobDetails}
+                            onApply={() => {}}
+                            actionLabel=""
+                          />
+                        </Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Box sx={{ textAlign: 'center', minWidth: 80 }}>
+                            <Typography variant="h6" fontWeight="bold" color="primary">
+                              {stats.total}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Applications
+                            </Typography>
+                          </Box>
+                          <IconButton
+                            onClick={(e) => handleJobMenuOpen(e, job)}
+                            size="small"
+                          >
+                            <MoreVert />
+                          </IconButton>
+                        </Stack>
+                      </Stack>
+                      
+                      {stats.total > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Stack direction="row" spacing={2} justifyContent="center">
+                            {stats.hired > 0 && (
+                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                <CheckCircle color="success" fontSize="small" />
+                                <Typography variant="caption" color="success.main">
+                                  {stats.hired} Hired
+                                </Typography>
+                              </Stack>
+                            )}
+                            {stats.shortlisted > 0 && (
+                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                <Schedule color="warning" fontSize="small" />
+                                <Typography variant="caption" color="warning.main">
+                                  {stats.shortlisted} Shortlisted
+                                </Typography>
+                              </Stack>
+                            )}
+                            {stats.pending > 0 && (
+                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                <TrendingUp color="info" fontSize="small" />
+                                <Typography variant="caption" color="info.main">
+                                  {stats.pending} Pending
+                                </Typography>
+                              </Stack>
+                            )}
+                          </Stack>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </Stack>
           )}
         </TabPanel>
       ))}
+
+      {/* Job Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleJobMenuClose}
+      >
+        <MenuItem onClick={handleViewApplications}>
+          <People sx={{ mr: 1 }} />
+          View Applications
+        </MenuItem>
+        <MenuItem onClick={handleEditJob}>
+          <Edit sx={{ mr: 1 }} />
+          Edit Job
+        </MenuItem>
+        <MenuItem onClick={handleJobDetails(selectedJob?.id || '')}>
+          <Visibility sx={{ mr: 1 }} />
+          View Details
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleDeleteJob} sx={{ color: 'error.main' }}>
+          <Delete sx={{ mr: 1 }} />
+          Delete Job
+        </MenuItem>
+      </Menu>
+
+      {/* Applications Dialog */}
+      <Dialog
+        open={showApplications}
+        onClose={handleCloseApplications}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" fontWeight="bold">
+              Applications for {selectedJob?.title}
+            </Typography>
+            <IconButton onClick={handleCloseApplications} size="small">
+              <Close />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {selectedJob && (
+            <ApplicationStatusManager
+              applications={getApplications(selectedJob.id)}
+              jobId={selectedJob.id}
+              onStatusChange={(applicationId, status) => {
+                console.log('Application status changed:', applicationId, status);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Delete Job
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{jobToDelete?.title}"? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDeleteJob}
+            color="error"
+            variant="contained"
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 };
