@@ -1,6 +1,13 @@
 import { useForm, UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import {
+  basicInfoSchema,
+  scheduleLocationSchema,
+  budgetRequirementsSchema,
+  applicationSchema,
+  locationSchema
+} from '../utils/validationSchemas';
 
 interface UseFormValidationOptions<T extends z.ZodType> {
   schema: T;
@@ -21,8 +28,7 @@ export function useFormValidation<T extends z.ZodType>({
 }
 
 // Specific hooks for job creation steps
-export function useBasicInfoValidation(defaultValues?: Partial<z.infer<typeof import('../utils/validationSchemas').basicInfoSchema>>) {
-  const { basicInfoSchema } = require('../utils/validationSchemas');
+export function useBasicInfoValidation(defaultValues?: Partial<z.infer<typeof basicInfoSchema>>) {
   return useFormValidation({
     schema: basicInfoSchema,
     defaultValues,
@@ -30,8 +36,7 @@ export function useBasicInfoValidation(defaultValues?: Partial<z.infer<typeof im
   });
 }
 
-export function useScheduleLocationValidation(defaultValues?: Partial<z.infer<typeof import('../utils/validationSchemas').scheduleLocationSchema>>) {
-  const { scheduleLocationSchema } = require('../utils/validationSchemas');
+export function useScheduleLocationValidation(defaultValues?: Partial<z.infer<typeof scheduleLocationSchema>>) {
   return useFormValidation({
     schema: scheduleLocationSchema,
     defaultValues,
@@ -39,8 +44,7 @@ export function useScheduleLocationValidation(defaultValues?: Partial<z.infer<ty
   });
 }
 
-export function useBudgetRequirementsValidation(defaultValues?: Partial<z.infer<typeof import('../utils/validationSchemas').budgetRequirementsSchema>>) {
-  const { budgetRequirementsSchema } = require('../utils/validationSchemas');
+export function useBudgetRequirementsValidation(defaultValues?: Partial<z.infer<typeof budgetRequirementsSchema>>) {
   return useFormValidation({
     schema: budgetRequirementsSchema,
     defaultValues,
@@ -48,8 +52,7 @@ export function useBudgetRequirementsValidation(defaultValues?: Partial<z.infer<
   });
 }
 
-export function useApplicationValidation(defaultValues?: Partial<z.infer<typeof import('../utils/validationSchemas').applicationSchema>>) {
-  const { applicationSchema } = require('../utils/validationSchemas');
+export function useApplicationValidation(defaultValues?: Partial<z.infer<typeof applicationSchema>>) {
   return useFormValidation({
     schema: applicationSchema,
     defaultValues,
@@ -57,8 +60,7 @@ export function useApplicationValidation(defaultValues?: Partial<z.infer<typeof 
   });
 }
 
-export function useLocationValidation(defaultValues?: Partial<z.infer<typeof import('../utils/validationSchemas').locationSchema>>) {
-  const { locationSchema } = require('../utils/validationSchemas');
+export function useLocationValidation(defaultValues?: Partial<z.infer<typeof locationSchema>>) {
   return useFormValidation({
     schema: locationSchema,
     defaultValues,

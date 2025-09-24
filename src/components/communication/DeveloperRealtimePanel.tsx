@@ -17,21 +17,21 @@ export const DeveloperRealtimePanel: React.FC = () => {
 
   const simulateTyping = () => {
     if (!conversationId) return;
-    const otherUserId = useOtherParticipant(conversationId);
+    const otherUserId = getOtherParticipant(conversationId);
     if (!otherUserId) return;
     setTypingStatusInConversation(conversationId, otherUserId, true);
     setTimeout(() => setTypingStatusInConversation(conversationId, otherUserId, false), 1500);
   };
 
   const simulatePresence = () => {
-    const otherUserId = useOtherParticipant(conversationId);
+    const otherUserId = getOtherParticipant(conversationId);
     if (!conversationId || !otherUserId) return;
     setOnlineStatus(otherUserId, 0 as any); // OnlineStatus.ONLINE without import to keep lightweight
   };
 
   const simulateIncomingMessage = () => {
     if (!conversationId) return;
-    const otherUserId = useOtherParticipant(conversationId);
+    const otherUserId = getOtherParticipant(conversationId);
     if (!otherUserId) return;
     addMessage({
       id: `dev_${Date.now()}`,
@@ -82,7 +82,7 @@ export const DeveloperRealtimePanel: React.FC = () => {
   );
 };
 
-function useOtherParticipant(conversationId: string): string | null {
+function getOtherParticipant(conversationId: string): string | null {
   const { conversations } = useCommunicationStore.getState();
   const conv = conversations.find(c => c.id === conversationId);
   if (!conv) return null;

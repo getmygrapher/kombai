@@ -137,18 +137,21 @@ export const useJobDiscoveryStore = create<JobDiscoveryStore>((set, get) => ({
       
       // Apply additional sorting
       switch (sortBy) {
-        case 'DATE':
+        case 'DATE': {
           filteredJobs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           break;
-        case 'BUDGET':
+        }
+        case 'BUDGET': {
           filteredJobs.sort((a, b) => b.budgetRange.max - a.budgetRange.max);
           break;
-        case 'URGENCY':
-          const urgencyOrder = { 'EMERGENCY': 3, 'URGENT': 2, 'NORMAL': 1 };
+        }
+        case 'URGENCY': {
+          const urgencyOrder = { 'EMERGENCY': 3, 'URGENT': 2, 'NORMAL': 1 } as const;
           filteredJobs.sort((a, b) => 
-            (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0)
+            (urgencyOrder[b.urgency as keyof typeof urgencyOrder] || 0) - (urgencyOrder[a.urgency as keyof typeof urgencyOrder] || 0)
           );
           break;
+        }
         // DISTANCE is already handled above
       }
       
