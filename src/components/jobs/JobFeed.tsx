@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Stack,
@@ -9,13 +9,18 @@ import {
   TextField,
   InputAdornment,
   Chip,
+  Skeleton,
+  Fab,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { JobCard } from './JobCard';
 import { Job } from '../../types';
-import { useAppStore } from '../../store/appStore';
+import { useJobDiscoveryStore } from '../../store/jobDiscoveryStore';
 import { useNearbyJobs } from '../../hooks/useJobs';
 
 const StyledContainer = styled(Box)(({ theme }) => ({
@@ -24,35 +29,70 @@ const StyledContainer = styled(Box)(({ theme }) => ({
   overflow: 'auto',
 }));
 
+const JobSkeleton = () => (
+  <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+    <Stack spacing={2}>
+      <Skeleton variant="text" width="80%" height={24} />
+      <Skeleton variant="text" width="60%" height={20} />
+      <Skeleton variant="rectangular" height={100} />
+      <Stack direction="row" spacing={1}>
+        <Skeleton variant="rectangular" width={80} height={24} />
+        <Skeleton variant="rectangular" width={100} height={24} />
+      </Stack>
+    </Stack>
+  </Box>
+);
+
 export const JobFeed: React.FC = () => {
-  const { currentLocation, selectedRadius, jobFilters, searchQuery, setSearchQuery } = useAppStore();
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [showFilters, setShowFilters] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const {
-    data: jobsData,
+    jobs,
     isLoading,
-    error,
-    refetch,
-  } = useNearbyJobs(
-    currentLocation || { lat: 9.9312, lng: 76.2673 },
-    selectedRadius,
-    jobFilters
-  );
+    hasMore,
+    searchQuery,
+    setSearchQuery,
+    loadJobs,
+    loadMoreJobs,
+    refreshJobs
+  } = useJobDiscoveryStore();
 
+  // Load jobs on mount
   useEffect(() => {
-    if (jobsData?.jobs) {
-      setJobs(jobsData.jobs);
-    }
-  }, [jobsData]);
+    loadJobs();
+  }, [loadJobs]);
 
-  const filteredJobs = jobs.filter(job =>
-    job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    job.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    job.professionalTypesNeeded.some(type =>
-      type.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  // Infinite scroll handler
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current || isLoading || !hasMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const threshold = 100; // Load more when 100px from bottom
+
+    if (scrollTop + clientHeight >= scrollHeight - threshold) {
+      loadMoreJobs();
+    }
+  }, [isLoading, hasMore, loadMoreJobs]);
+
+  // Attach scroll listener
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
+  // Pull to refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await refreshJobs();
+    setIsRefreshing(false);
+  }, [refreshJobs]);
 
   const handleJobDetails = (jobId: string) => {
     console.log('View job details:', jobId);
@@ -62,36 +102,12 @@ export const JobFeed: React.FC = () => {
     console.log('Apply to job:', jobId);
   };
 
-  const handleRefresh = () => {
-    refetch();
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
   };
 
-  if (isLoading) {
-    return (
-      <StyledContainer>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-          <CircularProgress />
-        </Box>
-      </StyledContainer>
-    );
-  }
-
-  if (error) {
-    return (
-      <StyledContainer>
-        <Alert severity="error" action={
-          <Button color="inherit" size="small" onClick={handleRefresh}>
-            Retry
-          </Button>
-        }>
-          Failed to load jobs. Please try again.
-        </Alert>
-      </StyledContainer>
-    );
-  }
-
   return (
-    <StyledContainer>
+    <StyledContainer ref={containerRef}>
       <Stack spacing={3}>
         {/* Search and Filters */}
         <Stack spacing={2}>
@@ -99,7 +115,7 @@ export const JobFeed: React.FC = () => {
             fullWidth
             placeholder="Search jobs by title, description, or type..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -118,13 +134,13 @@ export const JobFeed: React.FC = () => {
               Filters
             </Button>
             <Typography variant="body2" color="text.secondary">
-              {filteredJobs.length} jobs found
+              {jobs.length} jobs found
             </Typography>
           </Stack>
         </Stack>
 
         {/* Job List */}
-        {filteredJobs.length === 0 ? (
+        {jobs.length === 0 && !isLoading ? (
           <Box textAlign="center" py={4}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
               {searchQuery ? 'No jobs match your search' : 'No jobs found in your area'}
@@ -135,19 +151,52 @@ export const JobFeed: React.FC = () => {
           </Box>
         ) : (
           <Stack spacing={2}>
-            {filteredJobs.map((job) => (
+            {jobs.map((job) => (
               <JobCard
                 key={job.id}
                 job={job}
                 showDistance={true as any}
-              showApplicantCount={true as any}
+                showApplicantCount={true as any}
                 onViewDetails={handleJobDetails}
                 onApply={handleJobApply}
               />
             ))}
+            
+            {/* Loading skeletons */}
+            {isLoading && (
+              <>
+                <JobSkeleton />
+                <JobSkeleton />
+                <JobSkeleton />
+              </>
+            )}
+            
+            {/* Load more indicator */}
+            {hasMore && !isLoading && (
+              <Box textAlign="center" py={2}>
+                <Typography variant="body2" color="text.secondary">
+                  Scroll down to load more jobs
+                </Typography>
+              </Box>
+            )}
           </Stack>
         )}
       </Stack>
+
+      {/* Refresh FAB */}
+      <Fab
+        color="primary"
+        onClick={handleRefresh}
+        disabled={isRefreshing}
+        sx={{
+          position: 'fixed',
+          bottom: isMobile ? 80 : 24,
+          right: 16,
+          zIndex: 1000,
+        }}
+      >
+        {isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
+      </Fab>
     </StyledContainer>
   );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -9,17 +9,22 @@ import {
   Chip,
   Avatar,
   Box,
+  Alert,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import PeopleOutlineOutlinedIcon from '@mui/icons-material/PeopleOutlineOutlined';
-import { Job } from '../../types';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import { Job, ApplicationStatus } from '../../types';
 import { ProfessionalCategory } from '../../types/enums';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { StatusChip } from '../common/StatusChip';
 import { DistanceIndicator } from '../common/DistanceIndicator';
 import { RatingDisplay } from '../common/RatingDisplay';
+import { ApplicationDialog } from './ApplicationDialog';
+import { useApplicationStore } from '../../store/applicationStore';
 
 interface JobCardProps {
   job: Job;
@@ -28,6 +33,7 @@ interface JobCardProps {
   onViewDetails: (jobId: string) => void;
   onApply: (jobId: string) => void;
   actionLabel?: string;
+  userApplicationStatus?: ApplicationStatus;
 }
 
 const StyledCard = styled(Card)(({ theme }) => ({
@@ -57,13 +63,30 @@ export const JobCard: React.FC<JobCardProps> = ({
   onViewDetails,
   onApply,
   actionLabel,
+  userApplicationStatus,
 }) => {
+  const [showApplicationDialog, setShowApplicationDialog] = useState(false);
+  const { getApplications } = useApplicationStore();
+  
+  // Get user's application status for this job
+  const userApplication = getApplications(job.id).find(app => app.applicantId === 'current-user');
+  const applicationStatus = userApplicationStatus || userApplication?.status;
+
   const handleCardClick = () => {
     onViewDetails(job.id);
   };
 
   const handleApplyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (applicationStatus) {
+      // User has already applied, show status
+      return;
+    }
+    setShowApplicationDialog(true);
+  };
+
+  const handleApplicationSuccess = (applicationId: string) => {
+    setShowApplicationDialog(false);
     onApply(job.id);
   };
 
@@ -141,14 +164,65 @@ export const JobCard: React.FC<JobCardProps> = ({
             </Typography>
           )}
         </Stack>
-        <Button
-          variant="contained"
-          size="small"
-          onClick={handleApplyClick}
-        >
-          {actionLabel || 'Apply Now'}
-        </Button>
+        
+        {applicationStatus ? (
+          <Stack direction="row" spacing={1} alignItems="center">
+            {applicationStatus === 'HIRED' && (
+              <Alert severity="success" sx={{ py: 0, px: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CheckCircleIcon fontSize="small" />
+                  <Typography variant="caption" fontWeight="bold">
+                    Hired!
+                  </Typography>
+                </Stack>
+              </Alert>
+            )}
+            {applicationStatus === 'SHORTLISTED' && (
+              <Alert severity="warning" sx={{ py: 0, px: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ScheduleIcon fontSize="small" />
+                  <Typography variant="caption" fontWeight="bold">
+                    Shortlisted
+                  </Typography>
+                </Stack>
+              </Alert>
+            )}
+            {applicationStatus === 'PENDING' && (
+              <Alert severity="info" sx={{ py: 0, px: 1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ScheduleIcon fontSize="small" />
+                  <Typography variant="caption" fontWeight="bold">
+                    Pending Review
+                  </Typography>
+                </Stack>
+              </Alert>
+            )}
+            {applicationStatus === 'REJECTED' && (
+              <Alert severity="error" sx={{ py: 0, px: 1 }}>
+                <Typography variant="caption" fontWeight="bold">
+                  Not Selected
+                </Typography>
+              </Alert>
+            )}
+          </Stack>
+        ) : (
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleApplyClick}
+          >
+            {actionLabel || 'Apply Now'}
+          </Button>
+        )}
       </CardActions>
+
+      {/* Application Dialog */}
+      <ApplicationDialog
+        job={job}
+        open={showApplicationDialog}
+        onClose={() => setShowApplicationDialog(false)}
+        onSuccess={handleApplicationSuccess}
+      />
     </StyledCard>
   );
 };

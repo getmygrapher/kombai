@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Stack,
   TextField,
@@ -6,22 +6,56 @@ import {
   Box,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { useForm } from 'react-hook-form';
 import { Job } from '../../../types';
+import { LocationInput } from '../../common/LocationInput';
+import { useScheduleLocationValidation } from '../../../hooks/useFormValidation';
+import { ScheduleLocationFormData } from '../../../utils/validationSchemas';
 
 interface ScheduleLocationStepProps {
   jobData: Partial<Job> | null;
   errors: Record<string, string>;
   onChange: (data: Partial<Job>) => void;
+  onValidationChange?: (isValid: boolean) => void;
 }
 
 export const ScheduleLocationStep: React.FC<ScheduleLocationStepProps> = ({
   jobData,
   errors,
   onChange,
+  onValidationChange,
 }) => {
+  const form = useScheduleLocationValidation({
+    date: jobData?.date || '',
+    timeSlots: jobData?.timeSlots || [],
+    location: jobData?.location || {
+      address: '',
+      city: '',
+      state: '',
+      pinCode: '',
+      coordinates: undefined
+    }
+  });
+
+  const { control, watch, setValue, formState: { errors: formErrors, isValid } } = form;
+
+  // Watch form values and update parent
+  const watchedValues = watch();
+  
+  useEffect(() => {
+    onChange(watchedValues);
+  }, [watchedValues, onChange]);
+
+  // Notify parent about validation state
+  useEffect(() => {
+    if (onValidationChange) {
+      onValidationChange(isValid);
+    }
+  }, [isValid, onValidationChange]);
+
   const handleDateChange = (date: Date | null) => {
     if (date) {
-      onChange({ date: date.toISOString() });
+      setValue('date', date.toISOString());
     }
   };
 
@@ -31,18 +65,8 @@ export const ScheduleLocationStep: React.FC<ScheduleLocationStepProps> = ({
     }
   };
 
-  const handleLocationChange = (field: string, value: string) => {
-    const currentLocation = jobData?.location || {
-      city: '',
-      state: '',
-      coordinates: { lat: 9.9312, lng: 76.2673 }
-    };
-    onChange({
-      location: {
-        ...currentLocation,
-        [field]: value,
-      },
-    });
+  const handleLocationChange = (location: any) => {
+    setValue('location', location);
   };
 
   return (
@@ -56,13 +80,13 @@ export const ScheduleLocationStep: React.FC<ScheduleLocationStepProps> = ({
         <Stack spacing={2}>
           <DateTimePicker
             label="Start Date & Time *"
-            value={jobData?.date ? new Date(jobData.date) : null}
+            value={watchedValues.date ? new Date(watchedValues.date) : null}
             onChange={handleDateChange}
             slotProps={{
               textField: {
                 fullWidth: true,
-                error: !!errors.date,
-                helperText: errors.date,
+                error: !!formErrors.date,
+                helperText: formErrors.date?.message,
               },
             }}
           />
@@ -84,55 +108,14 @@ export const ScheduleLocationStep: React.FC<ScheduleLocationStepProps> = ({
         <Typography variant="subtitle2" gutterBottom>
           Job Location
         </Typography>
-        <Stack spacing={2}>
-          <TextField
-            fullWidth
-            label="Venue/Address *"
-            value={jobData?.location?.address || ''}
-            onChange={(e) => handleLocationChange('address', e.target.value)}
-            error={!!errors.location}
-            helperText={errors.location}
-            placeholder="e.g., Bolgatty Palace, Marine Drive"
-          />
-          
-          <Stack direction="row" spacing={2}>
-            <TextField
-              fullWidth
-              label="City"
-              value={jobData?.location?.city || ''}
-              onChange={(e) => handleLocationChange('city', e.target.value)}
-              placeholder="e.g., Kochi"
-            />
-            
-            <TextField
-              fullWidth
-              label="State"
-              value={jobData?.location?.state || ''}
-              onChange={(e) => handleLocationChange('state', e.target.value)}
-              placeholder="e.g., Kerala"
-            />
-          </Stack>
-          
-          <TextField
-            fullWidth
-            label="PIN Code *"
-            value={jobData?.location?.pinCode || ''}
-            onChange={(e) => handleLocationChange('pinCode', e.target.value)}
-            error={!!errors.pinCode}
-            helperText={errors.pinCode}
-            placeholder="e.g., 682001"
-          />
-          
-          <TextField
-            fullWidth
-            label="Venue Details (Optional)"
-            multiline
-            rows={2}
-            value={jobData?.location?.venueDetails || ''}
-            onChange={(e) => handleLocationChange('venueDetails', e.target.value)}
-            placeholder="Additional details about the venue, parking, access instructions..."
-          />
-        </Stack>
+        <LocationInput
+          value={watchedValues.location}
+          onChange={handleLocationChange}
+          required={true}
+          showMap={true}
+          label="Job Location"
+          helperText="Enter the complete address where the job will take place"
+        />
       </Box>
     </Stack>
   );

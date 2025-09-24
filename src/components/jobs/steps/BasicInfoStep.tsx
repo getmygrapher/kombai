@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Stack,
   TextField,
@@ -11,13 +11,17 @@ import {
   Box,
   Typography,
 } from '@mui/material';
+import { useController, useForm } from 'react-hook-form';
 import { ProfessionalCategory } from '../../../types/enums';
 import { Job } from '../../../types';
+import { useBasicInfoValidation } from '../../../hooks/useFormValidation';
+import { BasicInfoFormData } from '../../../utils/validationSchemas';
 
 interface BasicInfoStepProps {
   jobData: Partial<Job> | null;
   errors: Record<string, string>;
   onChange: (data: Partial<Job>) => void;
+  onValidationChange?: (isValid: boolean) => void;
 }
 
 const professionalTypes = {
@@ -51,24 +55,45 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   jobData,
   errors,
   onChange,
+  onValidationChange,
 }) => {
+  const form = useBasicInfoValidation({
+    title: jobData?.title || '',
+    type: jobData?.type || undefined,
+    professionalTypesNeeded: jobData?.professionalTypesNeeded || []
+  });
+
+  const { control, watch, setValue, formState: { errors: formErrors, isValid } } = form;
+
+  // Watch form values and update parent
+  const watchedValues = watch();
+  
+  useEffect(() => {
+    onChange(watchedValues);
+  }, [watchedValues, onChange]);
+
+  // Notify parent about validation state
+  useEffect(() => {
+    if (onValidationChange) {
+      onValidationChange(isValid);
+    }
+  }, [isValid, onValidationChange]);
+
   const handleTypeChange = (type: ProfessionalCategory) => {
-    onChange({
-      type,
-      professionalTypesNeeded: [], // Reset when category changes
-    });
+    setValue('type', type);
+    setValue('professionalTypesNeeded', []); // Reset when category changes
   };
 
   const handleProfessionalTypeToggle = (professionalType: string) => {
-    const current = jobData?.professionalTypesNeeded || [];
+    const current = watchedValues.professionalTypesNeeded || [];
     const updated = current.includes(professionalType)
       ? current.filter(t => t !== professionalType)
       : [...current, professionalType];
     
-    onChange({ professionalTypesNeeded: updated });
+    setValue('professionalTypesNeeded', updated);
   };
 
-  const availableTypes = jobData?.type ? professionalTypes[jobData.type] || [] : [];
+  const availableTypes = watchedValues.type ? professionalTypes[watchedValues.type] || [] : [];
 
   return (
     <Stack spacing={3}>
@@ -77,17 +102,18 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
       <TextField
         fullWidth
         label="Job Title"
-        value={jobData?.title || ''}
-        onChange={(e) => onChange({ title: e.target.value })}
-        error={!!errors.title}
-        helperText={errors.title}
+        {...control.register('title')}
+        error={!!formErrors.title}
+        helperText={formErrors.title?.message || `${(watchedValues.title || '').length}/100 characters`}
         placeholder="e.g., Wedding Photography - Traditional Kerala Wedding"
+        inputProps={{ maxLength: 100 }}
       />
 
-      <FormControl fullWidth error={!!errors.type}>
+      <FormControl fullWidth error={!!formErrors.type}>
         <InputLabel>Work Category</InputLabel>
         <Select
-          value={jobData?.type || ''}
+          {...control.register('type')}
+          value={watchedValues.type || ''}
           onChange={(e) => handleTypeChange(e.target.value as ProfessionalCategory)}
           label="Work Category"
         >
@@ -97,10 +123,10 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
             </MenuItem>
           ))}
         </Select>
-        {errors.type && <FormHelperText>{errors.type}</FormHelperText>}
+        {formErrors.type && <FormHelperText>{formErrors.type.message}</FormHelperText>}
       </FormControl>
 
-      {jobData?.type && (
+      {watchedValues.type && (
         <Box>
           <Typography variant="subtitle2" gutterBottom>
             Professional Types Needed *
@@ -111,29 +137,17 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                 key={type}
                 label={type}
                 clickable
-                color={jobData.professionalTypesNeeded?.includes(type) ? 'primary' : 'default'}
-                variant={jobData.professionalTypesNeeded?.includes(type) ? 'filled' : 'outlined'}
+                color={watchedValues.professionalTypesNeeded?.includes(type) ? 'primary' : 'default'}
+                variant={watchedValues.professionalTypesNeeded?.includes(type) ? 'filled' : 'outlined'}
                 onClick={() => handleProfessionalTypeToggle(type)}
               />
             ))}
           </Stack>
-          {errors.professionalTypesNeeded && (
-            <FormHelperText error>{errors.professionalTypesNeeded}</FormHelperText>
+          {formErrors.professionalTypesNeeded && (
+            <FormHelperText error>{formErrors.professionalTypesNeeded.message}</FormHelperText>
           )}
         </Box>
       )}
-
-      <TextField
-        fullWidth
-        label="Job Description"
-        multiline
-        rows={4}
-        value={jobData?.description || ''}
-        onChange={(e) => onChange({ description: e.target.value })}
-        error={!!errors.description}
-        helperText={errors.description}
-        placeholder="Describe your job requirements, expectations, and any special instructions..."
-      />
     </Stack>
   );
 };

@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
-import { useAppStore } from '../../store/appStore';
+import { useJobPostingStore } from '../../store/jobPostingStore';
 import { useCreateJob } from '../../hooks/useJobs';
 import { Job } from '../../types';
 import { BasicInfoStep } from './steps/BasicInfoStep';
@@ -27,6 +27,7 @@ interface JobCreationWizardProps {
   open: boolean;
   onClose: () => void;
   onComplete?: (job: Job) => void;
+  fullScreen?: boolean;
 }
 
 const StyledDialog = styled(Dialog)(({ theme }) => ({
@@ -51,147 +52,111 @@ const steps = [
 export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
   open,
   onClose,
-  onComplete
+  onComplete,
+  fullScreen = false
 }) => {
   const {
-    currentJobDraft,
-    jobCreationStep,
-    isSubmittingJob,
-    jobCreationErrors,
-    setJobDraft,
-    setJobCreationStep,
-    setIsSubmittingJob,
-    setJobCreationErrors,
-    clearJobDraft
-  } = useAppStore();
+    currentJob,
+    step,
+    isSubmitting,
+    errors,
+    setJobData,
+    nextStep,
+    prevStep,
+    setStep,
+    submitJob,
+    resetForm,
+    setErrors,
+    clearErrors,
+    setSubmitting
+  } = useJobPostingStore();
 
   const createJobMutation = useCreateJob();
   
   const handleNext = () => {
-    if (jobCreationStep < steps.length) {
-      setJobCreationStep(jobCreationStep + 1);
+    if (step < steps.length) {
+      nextStep();
     }
   };
 
   const handleBack = () => {
-    if (jobCreationStep > 1) {
-      setJobCreationStep(jobCreationStep - 1);
+    if (step > 1) {
+      prevStep();
     }
   };
 
   const handleClose = () => {
-    clearJobDraft();
+    resetForm();
     onClose();
   };
 
   const handleJobDataChange = (data: Partial<Job>) => {
-    setJobDraft({ ...currentJobDraft, ...data });
+    setJobData(data);
     // Clear related errors
-    const newErrors = { ...jobCreationErrors };
+    const newErrors = { ...errors };
     Object.keys(data).forEach(key => {
       delete newErrors[key];
     });
-    setJobCreationErrors(newErrors);
+    setErrors(newErrors);
   };
 
-  const validateStep = (step: number): boolean => {
-    const errors: Record<string, string> = {};
-    
-    switch (step) {
-      case 1:
-        if (!currentJobDraft?.title?.trim()) {
-          errors.title = 'Job title is required';
-        }
-        if (!currentJobDraft?.type) {
-          errors.type = 'Work type is required';
-        }
-        if (!currentJobDraft?.professionalTypesNeeded?.length) {
-          errors.professionalTypesNeeded = 'At least one professional type is required';
-        }
-        break;
-      case 2:
-        if (!currentJobDraft?.date) {
-          errors.date = 'Job date is required';
-        }
-        if (!currentJobDraft?.location?.address?.trim()) {
-          errors.location = 'Job location is required';
-        }
-        if (!currentJobDraft?.location?.pinCode?.trim()) {
-          errors.pinCode = 'PIN code is required';
-        }
-        break;
-      case 3:
-        if (!currentJobDraft?.budgetRange?.min || currentJobDraft.budgetRange.min <= 0) {
-          errors.budgetMin = 'Minimum budget is required';
-        }
-        if (!currentJobDraft?.budgetRange?.max || currentJobDraft.budgetRange.max <= 0) {
-          errors.budgetMax = 'Maximum budget is required';
-        }
-        if (currentJobDraft?.budgetRange?.min && currentJobDraft?.budgetRange?.max && 
-            currentJobDraft.budgetRange.min >= currentJobDraft.budgetRange.max) {
-          errors.budgetRange = 'Maximum budget must be greater than minimum';
-        }
-        if (!currentJobDraft?.description?.trim()) {
-          errors.description = 'Job description is required';
-        }
-        if (!currentJobDraft?.urgency) {
-          errors.urgency = 'Urgency level is required';
-        }
-        break;
-    }
+  const [stepValidation, setStepValidation] = React.useState<Record<number, boolean>>({});
 
-    setJobCreationErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleStepValidationChange = (stepNumber: number, isValid: boolean) => {
+    setStepValidation(prev => ({ ...prev, [stepNumber]: isValid }));
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(4) || !currentJobDraft) return;
+    if (!currentJob) return;
     
-    setIsSubmittingJob(true);
+    setSubmitting(true);
     try {
-      const result = await createJobMutation.mutateAsync(currentJobDraft);
-      if (result.success && onComplete) {
+      const result = await submitJob();
+      if (result.success && onComplete && result.job) {
         onComplete(result.job);
       }
       handleClose();
     } catch (error) {
-      setJobCreationErrors({ submit: 'Failed to create job. Please try again.' });
+      setErrors({ submit: 'Failed to create job. Please try again.' });
     } finally {
-      setIsSubmittingJob(false);
+      setSubmitting(false);
     }
   };
 
-  const renderStepContent = (step: number) => {
-    switch (step) {
+  const renderStepContent = (stepNumber: number) => {
+    switch (stepNumber) {
       case 1:
         return (
           <BasicInfoStep
-            jobData={currentJobDraft}
-            errors={jobCreationErrors}
+            jobData={currentJob}
+            errors={errors}
             onChange={handleJobDataChange}
+            onValidationChange={(isValid) => handleStepValidationChange(1, isValid)}
           />
         );
       case 2:
         return (
           <ScheduleLocationStep
-            jobData={currentJobDraft}
-            errors={jobCreationErrors}
+            jobData={currentJob}
+            errors={errors}
             onChange={handleJobDataChange}
+            onValidationChange={(isValid) => handleStepValidationChange(2, isValid)}
           />
         );
       case 3:
         return (
           <BudgetRequirementsStep
-            jobData={currentJobDraft}
-            errors={jobCreationErrors}
+            jobData={currentJob}
+            errors={errors}
             onChange={handleJobDataChange}
+            onValidationChange={(isValid) => handleStepValidationChange(3, isValid)}
           />
         );
       case 4:
         return (
           <ReviewPublishStep
-            jobData={currentJobDraft}
-            onEdit={(step) => setJobCreationStep(step)}
+            jobData={currentJob}
+            onEdit={(stepNumber) => setStep(stepNumber)}
           />
         );
       default:
@@ -203,8 +168,9 @@ export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
     <StyledDialog
       open={open}
       onClose={handleClose}
-      maxWidth="md"
-      fullWidth
+      maxWidth={fullScreen ? false : "md"}
+      fullWidth={!fullScreen}
+      fullScreen={fullScreen}
     >
       <DialogTitle>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -220,7 +186,7 @@ export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
       <DialogContent>
         <Stack spacing={4}>
           {/* Stepper */}
-          <Stepper activeStep={jobCreationStep - 1} alternativeLabel>
+          <Stepper activeStep={step - 1} alternativeLabel>
             {steps.map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
@@ -229,22 +195,22 @@ export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
           </Stepper>
 
           {/* Error Alert */}
-          {jobCreationErrors.submit && (
-            <Alert severity="error" onClose={() => setJobCreationErrors({ ...jobCreationErrors, submit: '' })}>
-              {jobCreationErrors.submit}
+          {errors.submit && (
+            <Alert severity="error" onClose={() => clearErrors()}>
+              {errors.submit}
             </Alert>
           )}
 
           {/* Step Content */}
           <Box sx={{ minHeight: 400 }}>
-            {renderStepContent(jobCreationStep)}
+            {renderStepContent(step)}
           </Box>
 
           {/* Navigation Buttons */}
           <Stack direction="row" justifyContent="space-between" sx={{ pt: 2 }}>
             <Button
               onClick={handleBack}
-              disabled={(jobCreationStep === 1) as any}
+              disabled={step === 1}
               variant="outlined"
             >
               Back
@@ -258,14 +224,11 @@ export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
                 Save as Draft
               </Button>
               
-              {jobCreationStep < steps.length ? (
+              {step < steps.length ? (
                 <Button
                   variant="contained"
-                  onClick={() => {
-                    if (validateStep(jobCreationStep)) {
-                      handleNext();
-                    }
-                  }}
+                  onClick={handleNext}
+                  disabled={!stepValidation[step]}
                 >
                   Next
                 </Button>
@@ -273,9 +236,9 @@ export const JobCreationWizard: React.FC<JobCreationWizardProps> = ({
                 <Button
                   variant="contained"
                   onClick={handleSubmit}
-                  disabled={isSubmittingJob as any}
+                  disabled={isSubmitting}
                 >
-                  {isSubmittingJob ? 'Publishing...' : 'Publish Job'}
+                  {isSubmitting ? 'Publishing...' : 'Publish Job'}
                 </Button>
               )}
             </Stack>
