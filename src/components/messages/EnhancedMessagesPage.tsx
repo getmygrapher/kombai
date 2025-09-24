@@ -12,6 +12,7 @@ import { styled } from '@mui/material/styles';
 import ChatBubbleOutlinedIcon from '@mui/icons-material/ChatBubbleOutlined';
 import { ConversationList } from '../communication/ConversationList';
 import { ChatWindow } from '../communication/ChatWindow';
+import { DeveloperRealtimePanel } from '../communication/DeveloperRealtimePanel';
 import { useCommunicationStore } from '../../store/communicationStore';
 import { mockQuery } from '../../data/communicationMockData';
 
@@ -157,6 +158,13 @@ export const EnhancedMessagesPage: React.FC = () => {
             )}
           </ChatPanel>
         </MessagesContainer>
+
+        {/* Dev-only realtime panel (toggle by env flag) */}
+        {import.meta?.env?.DEV && (
+          <Box>
+            <DeveloperRealtimePanel />
+          </Box>
+        )}
       </Stack>
 
       {/* New Chat FAB */}
