@@ -9,6 +9,7 @@ import {
   ContactSharingStatus
 } from '../types/communication';
 import { MessageType } from '../types/enums';
+import { useAppStore } from './appStore';
 
 interface CommunicationStore {
   // Conversation state
@@ -96,19 +97,22 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
       ...state.messages,
       [message.conversationId]: [...conversationMessages, message]
     };
-    
-    // Update conversation's last message
+
+    // Resolve current user id from app store (fallback maintained for backward compatibility)
+    const currentUserId = useAppStore.getState().user?.id ?? 'user_123';
+
+    // Update conversation's last message and unread count
     const updatedConversations = state.conversations.map(conv =>
       conv.id === message.conversationId
-        ? { 
-            ...conv, 
-            lastMessage: message, 
+        ? {
+            ...conv,
+            lastMessage: message,
             updatedAt: message.timestamp,
-            unreadCount: message.senderId !== 'user_123' ? conv.unreadCount + 1 : conv.unreadCount
+            unreadCount: message.senderId !== currentUserId ? conv.unreadCount + 1 : conv.unreadCount
           }
         : conv
     );
-    
+
     return {
       messages: updatedMessages,
       conversations: updatedConversations
@@ -117,14 +121,36 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   
   updateMessage: (messageId, updates) => set((state) => {
     const updatedMessages = { ...state.messages };
-    
+
+    // Track which conversation's lastMessage may need updating
+    let lastMessageConversationId: string | null = null;
+
     Object.keys(updatedMessages).forEach(conversationId => {
-      updatedMessages[conversationId] = updatedMessages[conversationId].map(msg =>
-        msg.id === messageId ? { ...msg, ...updates } : msg
-      );
+      updatedMessages[conversationId] = updatedMessages[conversationId].map(msg => {
+        if (msg.id === messageId) {
+          // If this message is currently the conversation's lastMessage, remember to sync it below
+          const conversation = state.conversations.find(c => c.id === conversationId);
+          if (conversation && conversation.lastMessage.id === messageId) {
+            lastMessageConversationId = conversationId;
+          }
+          return { ...msg, ...updates };
+        }
+        return msg;
+      });
     });
-    
-    return { messages: updatedMessages };
+
+    // Sync conversations.lastMessage when applicable
+    let updatedConversations = state.conversations;
+    if (lastMessageConversationId) {
+      const latest = updatedMessages[lastMessageConversationId].find(m => m.id === messageId);
+      if (latest) {
+        updatedConversations = state.conversations.map(conv =>
+          conv.id === lastMessageConversationId ? { ...conv, lastMessage: { ...conv.lastMessage, ...updates } } : conv
+        );
+      }
+    }
+
+    return { messages: updatedMessages, conversations: updatedConversations };
   }),
   
   markMessageAsRead: (messageId) => {
@@ -133,15 +159,21 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
   
   markConversationAsRead: (conversationId) => set((state) => {
     const conversationMessages = state.messages[conversationId] || [];
+    const currentUserId = useAppStore.getState().user?.id ?? 'user_123';
     const updatedMessages = {
       ...state.messages,
-      [conversationId]: conversationMessages.map(msg => ({ ...msg, isRead: true }))
+      [conversationId]: conversationMessages.map(msg => ({
+        ...msg,
+        isRead: true,
+        // Only set READ status for messages received by the current user
+        status: msg.senderId !== currentUserId ? MessageStatus.READ : msg.status
+      }))
     };
-    
+
     const updatedConversations = state.conversations.map(conv =>
       conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
     );
-    
+
     return {
       messages: updatedMessages,
       conversations: updatedConversations
@@ -207,3 +239,13 @@ export const useCommunicationStore = create<CommunicationStore>((set, get) => ({
     return { unreadMessageCount: totalUnread };
   })
 }));
+
+// Ensure unread count stays consistent after key mutations
+useCommunicationStore.subscribe((state, prev) => {
+  // If conversations array length or any unreadCount changed, recompute total
+  const prevTotal = prev?.conversations?.reduce((t, c) => t + c.unreadCount, 0) ?? 0;
+  const nextTotal = state.conversations.reduce((t, c) => t + c.unreadCount, 0);
+  if (prevTotal !== nextTotal) {
+    useCommunicationStore.getState().updateUnreadCount();
+  }
+});

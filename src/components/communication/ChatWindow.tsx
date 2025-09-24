@@ -16,6 +16,7 @@ import { MessageData, OnlineStatus, ContactSharingStatus } from '../../types/com
 import { MessageType } from '../../types/enums';
 import { useCommunicationStore } from '../../store/communicationStore';
 import { mockQuery } from '../../data/communicationMockData';
+import { useAppStore } from '../../store/appStore';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -76,6 +77,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     deleteConversation
   } = useCommunicationStore();
 
+  const currentUser = useAppStore(state => state.user);
+
   const conversation = conversations.find(conv => conv.id === conversationId);
   const conversationMessages = messages[conversationId] || [];
   
@@ -102,7 +105,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const newMessage: MessageData = {
       id: `msg_${Date.now()}`,
       conversationId,
-      senderId: 'user_123', // Current user ID
+      senderId: currentUser?.id || 'user_123',
       receiverId: professional?.id || '',
       content,
       timestamp: new Date().toISOString(),
@@ -222,7 +225,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         <Stack spacing={1}>
           {conversationMessages.map((message, index) => {
-            const isOwn = message.senderId === 'user_123';
+            const isOwn = message.senderId === (currentUser?.id || 'user_123');
             const showAvatar = !isOwn && (
               index === 0 || 
               conversationMessages[index - 1]?.senderId !== message.senderId
