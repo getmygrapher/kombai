@@ -1,6 +1,15 @@
 # GetMyGrapher Job Posting System Flow
 
 ## Overview
+Implementation Status (2025-09-24)
+- Completed:
+  - Wizard, discovery, and dashboard components exist (`components/jobs/*`, `pages/jobs/*`), discovery store and job hooks present, mock data wired.
+- In progress:
+  - Route map alignment and BottomNavigation navigation to `/jobs` and `/jobs/new`.
+- Pending:
+  - Services (`services/jobsService.ts`), dedicated types (`types/jobs.ts`), apply flow components, draft autosave, proximity utilities, analytics events.
+
+PRD Reference: getmygrapher_prd.md §4.4 (Job Posting)
 
 This document outlines the complete frontend job posting system for GetMyGrapher, a professional-only platform connecting creative professionals in India. The system enables professionals to post job opportunities and discover relevant work based on proximity, skills, and availability.
 

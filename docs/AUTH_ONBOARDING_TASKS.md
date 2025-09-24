@@ -1,23 +1,38 @@
 # Authentication & User Registration – Frontend Task Breakdown (Kombai Agent)
 
+Implementation Status (2025-09-24)
+- Completed:
+  - Screens: `CategorySelectionScreen.tsx`, `ProfessionalTypeSelectionScreen.tsx`, `LocationSetupScreen.tsx`, `BasicProfileSetupScreen.tsx`, `ProfessionalDetailsScreen.tsx`, `AvailabilitySetupScreen.tsx`, `RegistrationCompleteScreen.tsx`, `StepNavigation.tsx`, `OnboardingLayout.tsx`, `OnboardingFlow.tsx` (found in `src/components/onboarding/*`).
+  - `AuthenticationScreen.tsx` with Google and Email stubs; analytics hooks present.
+  - Store and enums present (`src/store/onboardingStore.ts`, `src/types/enums.ts`).
+- In progress:
+  - Route guards and full route map integration in root (`App.tsx` present; `App.GetMyGrapher.tsx` not found). Align with PRD Onboarding Flow (PRD §7.2) and Auth (PRD §4.1).
+  - Validation utilities consolidation (partial in `utils/analyticsEvents.ts`; dedicated `registrationValidation.ts` not found).
+- Pending:
+  - Real Google OAuth/session refresh plumbing (`services/auth/googleAuth`/`session` exist but require backend wiring).
+  - `locationServices.ts`, `fileUploadUtils.ts` utilities; OTP/verification flows.
+
+References
+- PRD: User Registration & Authentication (getmygrapher_prd.md §4.1), Onboarding Flow (PRD §7.2)
+- Flow: Authentication_User_Registration_Flow.md (Architecture, Steps, Phases)
+
 Purpose
 - Provide a precise, implementation-ready task list focused on Authentication_User_Registration_Flow.md.
 - Call out exact files to add/update, acceptance criteria, dependencies, and UI consistency rules.
 
 Context Snapshot (what exists vs missing)
-- Exists
-  - src/components/auth/AuthenticationScreen.tsx (Google + Email placeholders; simulated flows)
-  - src/components/onboarding/WelcomeScreen.tsx (present)
-  - src/components/onboarding/OnboardingLayout.tsx, ProgressIndicator.tsx (present)
-  - src/store/onboardingStore.ts (present)
-  - src/theme/index.ts + feature themes (homepageTheme, communicationTheme, etc.)
-- Missing (to implement)
-  - Routing at the app root for multi-step onboarding (React Router v7 declarative)
-  - Onboarding step screens: CategorySelectionScreen.tsx, ProfessionalTypeSelectionScreen.tsx,
-    LocationSetupScreen.tsx, BasicProfileSetupScreen.tsx, ProfessionalDetailsScreen.tsx,
-    AvailabilitySetupScreen.tsx, RegistrationCompleteScreen.tsx, StepNavigation.tsx
-  - Utilities: registrationValidation.ts, locationServices.ts, fileUploadUtils.ts, analyticsEvents.ts
-  - Real Google OAuth integration and session management glue
+- Exists (verified in codebase)
+  - src/components/auth/AuthenticationScreen.tsx (Google + Email paths; simulated flows)
+  - src/components/onboarding/WelcomeScreen.tsx
+  - src/components/onboarding/{OnboardingLayout, ProgressIndicator, StepNavigation, OnboardingFlow}.tsx
+  - src/components/onboarding step screens listed below (all present)
+  - src/store/onboardingStore.ts
+  - src/utils/analyticsEvents.ts
+  - src/theme/index.ts + feature themes
+- Missing / To implement
+  - Root routing integration and guards (React Router v7 declarative)
+  - Utilities: registrationValidation.ts, locationServices.ts, fileUploadUtils.ts
+  - Real Google OAuth integration and session refresh/storage hardening
 
 Design System and UI Consistency Rules (apply to all new/updated components)
 - Use MUI v7 with project theme tokens: src/theme/index.ts palette, spacing, typography.

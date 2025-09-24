@@ -1,5 +1,22 @@
 # Availability Management – Frontend Task Breakdown (Kombai Agent)
 
+Implementation Status (2025-09-24)
+- Completed:
+  - Core components exist: `AvailabilityCalendar.tsx`, `TimeSlotSelector.tsx`, `RecurringPatternManager.tsx`, `AvailabilityManager.tsx`, `CalendarPage.tsx`.
+  - Types defined in `src/types/availability.ts`.
+- In progress:
+  - Privacy controls and stats scaffolding present; need upgrade per flow.
+  - Route container `App.AvailabilityManagement.tsx` exists; integrate full route map.
+- Pending:
+  - `CalendarHeader.tsx`, `CalendarLegend.tsx`, `QuickAvailabilityActions.tsx`, `BulkAvailabilityEditor.tsx`, `AvailabilityPresets.tsx`.
+  - Booking integration UIs: `BookingAvailabilityBridge.tsx`, `BookingConflictResolver.tsx`, `AvailabilityBookingStatus.tsx`, `BookingCalendarOverlay.tsx`.
+  - Privacy dashboard and access controls; export/import/sync utilities; validation utils; notifications.
+  - Services/adapters and realtime sync stubs.
+
+References
+- PRD: Availability Calendar (getmygrapher_prd.md §4.3)
+- Flow: Availability_Management_System_Flow.md (Calendar, Time Slots, Booking Integration, Privacy)
+
 Purpose
 - Provide an implementation-ready task list focused on Availability_Management_System_Flow.md.
 - Enforce proper routing (React Router v7) and UI consistency via MUI v7 theme tokens.
