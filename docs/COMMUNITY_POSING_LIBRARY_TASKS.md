@@ -1,5 +1,18 @@
 # Community Posing Library – Frontend Task Breakdown (Kombai Agent)
 
+Implementation Status (2025-09-24)
+- Completed:
+  - Community components present: `App.CommunityPosingLibrary.tsx`, and components referenced in `App.CommunityPosingLibrary` such as Browser, Detail, Grid Item, Filter, Interaction, Comments, CameraSettings, PhotographerInfo. Types and EXIF service exist; theme present.
+- In progress:
+  - Routing and layout likely partial; ensure `/community/(browse|pose/:id|contribute|moderation)` nested routes.
+  - Store scaffolding and interactions wiring.
+- Pending:
+  - Contribution wizard screens, moderation dashboard, community service adapters, Zustand store, realtime stubs, validation utilities.
+
+References
+- PRD: Community Posing Library (getmygrapher_prd.md §4.8)
+- Flow: community_posing_library.md
+
 Purpose
 - Provide an implementation-ready task list focused on community_posing_library.md.
 - Enforce proper routing (React Router v7) and UI consistency via MUI v7 theme tokens.
