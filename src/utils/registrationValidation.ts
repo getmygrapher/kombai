@@ -20,7 +20,7 @@ export const validateMobileNumber = (mobile: string): ValidationResult => {
   }
 
   // Remove spaces and special characters
-  const cleanMobile = mobile.replace(/[\s\-\(\)]/g, '');
+  const cleanMobile = mobile.replace(/[\s\-()]/g, '');
   
   // Check for +91 prefix or 10-digit number
   const indianMobilePattern = /^(\+91|91)?[6-9]\d{9}$/;
@@ -69,7 +69,7 @@ export const validateFullName = (name: string): ValidationResult => {
   }
 
   // Check for valid name characters (letters, spaces, hyphens, apostrophes)
-  const namePattern = /^[a-zA-Z\s\-'\.]+$/;
+  const namePattern = /^[a-zA-Z\s\-'.]+$/;
   
   if (!namePattern.test(name)) {
     return { isValid: false, error: 'Name can only contain letters, spaces, hyphens, and apostrophes' };
@@ -130,7 +130,7 @@ export const validateCity = (city: string): ValidationResult => {
     return { isValid: false, error: 'City name must be at least 2 characters long' };
   }
 
-  const cityPattern = /^[a-zA-Z\s\-'\.]+$/;
+  const cityPattern = /^[a-zA-Z\s\-'.]+$/;
   
   if (!cityPattern.test(city)) {
     return { isValid: false, error: 'City name can only contain letters, spaces, hyphens, and apostrophes' };

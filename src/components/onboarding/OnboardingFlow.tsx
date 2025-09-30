@@ -85,6 +85,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   }, [currentStep, registrationData.basicProfile.fullName, registrationData.basicProfile.primaryMobile, updateRegistrationData]);
 
   // Navigation helpers
+  // Exit handler that properly clears state and navigates
+  const handleExitOnboarding = () => {
+    // Clear onboarding state
+    setRegistrationStatus(RegistrationStatus.NOT_STARTED);
+    setCurrentStep(OnboardingStep.WELCOME);
+    
+    // Navigate to welcome screen
+    navigate('/welcome', { replace: true });
+  };
+
   const navigateToStep = (step: OnboardingStep) => {
     const stepRoutes: Record<OnboardingStep, string> = {
       [OnboardingStep.WELCOME]: '/welcome',
@@ -323,47 +333,131 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   };
 
   const handleRegistrationComplete = async () => {
-    // Create user object from registration data
-    let supabaseUserId = 'user_' + Date.now();
     try {
-      supabaseUserId = await onboardingService.getCurrentUserId();
+      // Get the current user ID from Supabase
+      const supabaseUserId = await onboardingService.getCurrentUserId();
+      
+      // Save all remaining data to backend before completing
+      await Promise.all([
+        // Ensure basic profile is saved
+        onboardingService.upsertBasicProfile({
+          fullName: registrationData.basicProfile.fullName,
+          avatarUrl: registrationData.basicProfile.profilePhotoUrl,
+          phone: registrationData.basicProfile.primaryMobile,
+        }),
+        
+        // Ensure professional profile is saved with all details
+        onboardingService.upsertProfessionalProfile({
+          selectedCategory: registrationData.selectedCategory,
+          selectedType: registrationData.selectedType,
+          experienceLevel: registrationData.professionalDetails.experienceLevel,
+          specializations: registrationData.professionalDetails.specializations,
+          pricing: registrationData.professionalDetails.pricing,
+          equipment: registrationData.professionalDetails.equipment,
+          instagramHandle: registrationData.professionalDetails.instagramHandle,
+          portfolioLinks: registrationData.professionalDetails.portfolioLinks,
+        }),
+        
+        // Ensure location data is saved
+        onboardingService.upsertLocation({
+          city: registrationData.location.city,
+          state: registrationData.location.state,
+          pinCode: registrationData.location.pinCode,
+          workRadiusKm: 25, // Default value
+          additionalLocations: registrationData.location.additionalLocations.map(loc => ({ city: loc }))
+        }),
+        
+        // Ensure availability settings are saved
+        onboardingService.upsertAvailability({
+          defaultSchedule: registrationData.availability.defaultSchedule,
+          leadTime: registrationData.availability.leadTime,
+          advanceBookingLimit: registrationData.availability.advanceBookingLimit,
+          calendarVisibility: registrationData.availability.calendarVisibility,
+        })
+      ]);
+      
+      // Mark registration as complete
       await onboardingService.completeStep('REGISTRATION_COMPLETE');
-    } catch (err: any) {
-      analyticsService.trackValidationError(OnboardingStep.REGISTRATION_COMPLETE, 'service', err.message || 'Failed to finalize onboarding');
-    }
-    const user: User = {
-      id: supabaseUserId,
-      name: registrationData.basicProfile.fullName,
-      email: registrationData.email,
-      phone: registrationData.basicProfile.primaryMobile,
-      profilePhoto: registrationData.basicProfile.profilePhotoUrl,
-      professionalCategory: registrationData.selectedCategory!,
-      professionalType: registrationData.selectedType,
-      location: {
-        city: registrationData.location.city,
-        state: registrationData.location.state,
-        pinCode: registrationData.location.pinCode,
-        coordinates: registrationData.location.coordinates || { lat: 0, lng: 0 },
-      },
-      tier: 'Free' as any,
-      rating: 0,
-      totalReviews: 0,
-      isVerified: false,
-      joinedDate: new Date().toISOString(),
-      experience: registrationData.professionalDetails.experienceLevel,
-      gender: registrationData.basicProfile.gender,
-      about: registrationData.basicProfile.about,
-      specializations: registrationData.professionalDetails.specializations,
-      pricing: registrationData.professionalDetails.pricing,
-      equipment: registrationData.professionalDetails.equipment,
-      instagramHandle: registrationData.professionalDetails.instagramHandle,
-    };
+      
+      // Create user object from registration data
+      const user: User = {
+        id: supabaseUserId,
+        name: registrationData.basicProfile.fullName,
+        email: registrationData.email,
+        phone: registrationData.basicProfile.primaryMobile,
+        profilePhoto: registrationData.basicProfile.profilePhotoUrl,
+        professionalCategory: registrationData.selectedCategory!,
+        professionalType: registrationData.selectedType,
+        location: {
+          city: registrationData.location.city,
+          state: registrationData.location.state,
+          pinCode: registrationData.location.pinCode,
+          coordinates: registrationData.location.coordinates || { lat: 0, lng: 0 },
+        },
+        tier: 'Free' as any,
+        rating: 0,
+        totalReviews: 0,
+        isVerified: false,
+        joinedDate: new Date().toISOString(),
+        experience: registrationData.professionalDetails.experienceLevel,
+        gender: registrationData.basicProfile.gender,
+        about: registrationData.basicProfile.about,
+        specializations: registrationData.professionalDetails.specializations,
+        pricing: registrationData.professionalDetails.pricing,
+        equipment: registrationData.professionalDetails.equipment,
+        instagramHandle: registrationData.professionalDetails.instagramHandle,
+      };
 
-    // Now set user as authenticated after completing onboarding
-    setUser(user);
-    setAuthenticated(true);
-    setRegistrationStatus(RegistrationStatus.COMPLETED);
-    onRegistrationComplete(user);
+      // Update local state
+      setUser(user);
+      setAuthenticated(true);
+      setRegistrationStatus(RegistrationStatus.COMPLETED);
+      
+      // Track completion
+      analyticsService.trackStepCompleted(OnboardingStep.REGISTRATION_COMPLETE, { userId: supabaseUserId });
+      
+      // Call the completion handler
+      onRegistrationComplete(user);
+      
+    } catch (err: any) {
+      console.error('Registration completion failed:', err);
+      analyticsService.trackValidationError(OnboardingStep.REGISTRATION_COMPLETE, 'service', err.message || 'Failed to complete registration');
+      
+      // Still try to complete with fallback user ID
+      const fallbackUserId = 'user_' + Date.now();
+      const user: User = {
+        id: fallbackUserId,
+        name: registrationData.basicProfile.fullName,
+        email: registrationData.email,
+        phone: registrationData.basicProfile.primaryMobile,
+        profilePhoto: registrationData.basicProfile.profilePhotoUrl,
+        professionalCategory: registrationData.selectedCategory!,
+        professionalType: registrationData.selectedType,
+        location: {
+          city: registrationData.location.city,
+          state: registrationData.location.state,
+          pinCode: registrationData.location.pinCode,
+          coordinates: registrationData.location.coordinates || { lat: 0, lng: 0 },
+        },
+        tier: 'Free' as any,
+        rating: 0,
+        totalReviews: 0,
+        isVerified: false,
+        joinedDate: new Date().toISOString(),
+        experience: registrationData.professionalDetails.experienceLevel,
+        gender: registrationData.basicProfile.gender,
+        about: registrationData.basicProfile.about,
+        specializations: registrationData.professionalDetails.specializations,
+        pricing: registrationData.professionalDetails.pricing,
+        equipment: registrationData.professionalDetails.equipment,
+        instagramHandle: registrationData.professionalDetails.instagramHandle,
+      };
+
+      setUser(user);
+      setAuthenticated(true);
+      setRegistrationStatus(RegistrationStatus.COMPLETED);
+      onRegistrationComplete(user);
+    }
   };
 
   return (
@@ -373,7 +467,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.CATEGORY_SELECTION}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <CategorySelectionScreen
             selectedCategory={registrationData.selectedCategory}
@@ -388,7 +482,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.TYPE_SELECTION}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <ProfessionalTypeSelectionScreen
             selectedCategory={registrationData.selectedCategory!}
@@ -404,7 +498,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.LOCATION_SETUP}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <LocationSetupScreen
             locationData={registrationData.location}
@@ -421,7 +515,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.BASIC_PROFILE}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <BasicProfileSetupScreen
             profileData={registrationData.basicProfile}
@@ -438,7 +532,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.PROFESSIONAL_DETAILS}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <ProfessionalDetailsScreen
             selectedCategory={registrationData.selectedCategory!}
@@ -454,7 +548,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         <OnboardingLayout
           currentStep={OnboardingStep.AVAILABILITY_SETUP}
           completedSteps={completedSteps}
-          onExit={() => navigate('/welcome')}
+          onExit={handleExitOnboarding}
         >
           <AvailabilitySetupScreen
             availabilityData={registrationData.availability}

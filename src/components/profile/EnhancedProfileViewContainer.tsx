@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import {
   Container,
   Typography,
@@ -17,8 +17,8 @@ import { ProfileNavigation } from './ProfileNavigation';
 import { ProfileOverview } from './ProfileOverview';
 import { PortfolioGallery } from './PortfolioGallery';
 import { EquipmentShowcase } from './EquipmentShowcase';
-import { ReviewsSection } from './ReviewsSection';
-import { AvailabilityWidget } from './AvailabilityWidget';
+const ReviewsSection = React.lazy(() => import('./ReviewsSection').then(m => ({ default: m.ReviewsSection })));
+const AvailabilityWidget = React.lazy(() => import('./AvailabilityWidget').then(m => ({ default: m.AvailabilityWidget })));
 import { ContactActions } from './ContactActions';
 import { ImageLightbox } from './ImageLightbox';
 
@@ -149,22 +149,26 @@ export const EnhancedProfileViewContainer: React.FC<ProfileViewProps> = ({
         );
       case ProfileTab.REVIEWS:
         return (
-          <ReviewsSection
-            reviews={profileData.reviews}
-            professional={profileData.professional}
-          />
+          <Suspense fallback={<Box sx={{ p: 2 }}><CircularProgress size={24} /></Box>}>
+            <ReviewsSection
+              reviews={profileData.reviews}
+              professional={profileData.professional}
+            />
+          </Suspense>
         );
       case ProfileTab.AVAILABILITY:
         return (
-          <AvailabilityWidget
-            availability={profileData.availability}
-            professional={profileData.professional}
-            viewerPermissions={profileData.viewerPermissions}
-            onBookingRequest={(date, timeSlot) => {
-              console.log('Booking request:', date, timeSlot);
-              onBookProfessional(professionalId);
-            }}
-          />
+          <Suspense fallback={<Box sx={{ p: 2 }}><CircularProgress size={24} /></Box>}>
+            <AvailabilityWidget
+              availability={profileData.availability}
+              professional={profileData.professional}
+              viewerPermissions={profileData.viewerPermissions}
+              onBookingRequest={(date, timeSlot) => {
+                console.log('Booking request:', date, timeSlot);
+                onBookProfessional(professionalId);
+              }}
+            />
+          </Suspense>
         );
       default:
         return null;

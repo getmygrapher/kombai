@@ -47,14 +47,16 @@ export const JobFeedPage: React.FC = () => {
 
   const handleRemoveFilter = (filterType: string, value?: any) => {
     switch (filterType) {
-      case 'category':
+      case 'category': {
         const newCategories = filters.categories.filter(cat => cat !== value);
         setFilters({ categories: newCategories });
         break;
-      case 'urgency':
+      }
+      case 'urgency': {
         const newUrgency = filters.urgency.filter(urg => urg !== value);
         setFilters({ urgency: newUrgency });
         break;
+      }
       case 'budget':
         setFilters({ budgetRange: { min: 0, max: 100000 } });
         break;

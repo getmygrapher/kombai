@@ -63,7 +63,9 @@ class SessionManager {
         if (expiresAtSec) {
           return Date.now() < expiresAtSec * 1000;
         }
-      } catch {}
+      } catch {
+        // Ignore parsing errors and fall back to session check
+      }
     }
 
     const session = this.getSession();

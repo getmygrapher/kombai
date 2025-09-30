@@ -185,33 +185,47 @@ const App: React.FC = () => {
           const status = await onboardingService.getStatus();
           const completed = status?.status === 'completed' || status?.current_step === 'REGISTRATION_COMPLETE';
           setOnboardingCompleted(!!completed);
-          // If user is authenticated and not completed onboarding, ensure they are on onboarding route
-          if (!completed && !location.pathname.startsWith('/onboarding')) {
-            const stepToPath: Record<string, string> = {
-              CATEGORY_SELECTION: '/onboarding/category',
-              TYPE_SELECTION: '/onboarding/type',
-              LOCATION_SETUP: '/onboarding/location',
-              BASIC_PROFILE: '/onboarding/basic-profile',
-              PROFESSIONAL_DETAILS: '/onboarding/professional-details',
-              AVAILABILITY_SETUP: '/onboarding/availability',
-              REGISTRATION_COMPLETE: '/home',
-            };
-            const target = status?.current_step ? (stepToPath[status.current_step] || '/onboarding/category') : '/onboarding/category';
-            navigate(target, { replace: true });
+          
+          // Only redirect if we're not already in the correct place
+          const currentPath = location.pathname;
+          const isOnOnboardingPath = currentPath.startsWith('/onboarding');
+          const isOnAuthPath = currentPath === '/auth' || currentPath === '/welcome';
+          
+          if (!completed) {
+            // User hasn't completed onboarding
+            if (!isOnOnboardingPath && !isOnAuthPath) {
+              const stepToPath: Record<string, string> = {
+                CATEGORY_SELECTION: '/onboarding/category',
+                TYPE_SELECTION: '/onboarding/type',
+                LOCATION_SETUP: '/onboarding/location',
+                BASIC_PROFILE: '/onboarding/basic-profile',
+                PROFESSIONAL_DETAILS: '/onboarding/professional-details',
+                AVAILABILITY_SETUP: '/onboarding/availability',
+                REGISTRATION_COMPLETE: '/home',
+              };
+              const target = status?.current_step ? (stepToPath[status.current_step] || '/onboarding/category') : '/onboarding/category';
+              navigate(target, { replace: true });
+            }
+          } else {
+            // User has completed onboarding
+            if (isOnOnboardingPath || isOnAuthPath) {
+              navigate('/home', { replace: true });
+            }
           }
-          // If completed but currently under onboarding path, redirect home
-          if (completed && location.pathname.startsWith('/onboarding')) {
-            navigate('/home', { replace: true });
-          }
-        } catch {
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
           setOnboardingCompleted(false);
+          // If there's an error and user is authenticated, assume onboarding is incomplete
+          if (!location.pathname.startsWith('/onboarding') && location.pathname !== '/auth' && location.pathname !== '/welcome') {
+            navigate('/onboarding/category', { replace: true });
+          }
         }
       })();
     } else {
       setOnboardingCompleted(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authInitialized, isAuthenticated]);
+  }, [authInitialized, isAuthenticated, location.pathname]);
 
   // Handler functions for HomePage
   const handleJobDetails = (jobId: string) => {
