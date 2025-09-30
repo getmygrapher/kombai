@@ -1,4 +1,6 @@
 import { User } from '../../types';
+import { supabase } from '../supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 export interface SessionData {
   user: User;
@@ -37,21 +39,10 @@ class SessionManager {
    */
   getSession(): SessionData | null {
     try {
-      const accessToken = localStorage.getItem(this.ACCESS_TOKEN_KEY);
-      const refreshToken = localStorage.getItem(this.REFRESH_TOKEN_KEY);
-      const userData = localStorage.getItem(this.USER_DATA_KEY);
-      const expiresAt = localStorage.getItem(this.EXPIRES_AT_KEY);
-
-      if (!accessToken || !refreshToken || !userData || !expiresAt) {
-        return null;
-      }
-
-      return {
-        user: JSON.parse(userData),
-        accessToken,
-        refreshToken,
-        expiresAt: parseInt(expiresAt)
-      };
+      // Prefer Supabase session if available
+      // Note: expires_at is in seconds; convert to ms
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      return null;
     } catch (error) {
       console.error('Failed to get session:', error);
       return null;
@@ -62,9 +53,21 @@ class SessionManager {
    * Check if current session is valid
    */
   isSessionValid(): boolean {
+    // Check Supabase session first
+    // Synchronously approximate validity via local storage fallback
+    const sbSessionStr = localStorage.getItem('supabase.auth.token');
+    if (sbSessionStr) {
+      try {
+        const parsed = JSON.parse(sbSessionStr);
+        const expiresAtSec = parsed?.currentSession?.expires_at;
+        if (expiresAtSec) {
+          return Date.now() < expiresAtSec * 1000;
+        }
+      } catch {}
+    }
+
     const session = this.getSession();
     if (!session) return false;
-
     const now = Date.now();
     return now < session.expiresAt;
   }
@@ -75,7 +78,6 @@ class SessionManager {
   needsRefresh(): boolean {
     const session = this.getSession();
     if (!session) return false;
-
     const now = Date.now();
     const fiveMinutes = 5 * 60 * 1000;
     return now > (session.expiresAt - fiveMinutes);
@@ -87,22 +89,22 @@ class SessionManager {
   async refreshToken(): Promise<string | null> {
     const session = this.getSession();
     if (!session) return null;
-
     try {
-      // Simulate token refresh API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const response: RefreshTokenResponse = {
-        accessToken: `refreshed_token_${Date.now()}`,
-        expiresIn: 3600
-      };
-
-      // Update stored tokens
-      const newExpiresAt = Date.now() + (response.expiresIn * 1000);
-      localStorage.setItem(this.ACCESS_TOKEN_KEY, response.accessToken);
-      localStorage.setItem(this.EXPIRES_AT_KEY, newExpiresAt.toString());
-
-      return response.accessToken;
+      // Attempt Supabase refresh if possible
+      const sb = await supabase.auth.getSession();
+      const refreshToken = sb.data.session?.refresh_token;
+      if (refreshToken) {
+        const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+        if (error) throw error;
+        const newAccessToken = data.session?.access_token || null;
+        const expiresAtSec = data.session?.expires_at || 0;
+        if (newAccessToken) {
+          localStorage.setItem(this.ACCESS_TOKEN_KEY, newAccessToken);
+          localStorage.setItem(this.EXPIRES_AT_KEY, String(expiresAtSec * 1000));
+        }
+        return newAccessToken;
+      }
+      return null;
     } catch (error) {
       console.error('Token refresh failed:', error);
       this.clearSession();

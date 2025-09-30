@@ -22,13 +22,14 @@ export const calculateProgress = (currentStep: OnboardingStep): number => {
 // Step formatting
 export const formatStepNumber = (step: OnboardingStep): string => {
   const stepNumbers = {
-    [OnboardingStep.WELCOME]: '1 of 6',
-    [OnboardingStep.AUTHENTICATION]: '1 of 6',
-    [OnboardingStep.CATEGORY_SELECTION]: '2 of 6',
-    [OnboardingStep.TYPE_SELECTION]: '3 of 6',
-    [OnboardingStep.LOCATION_SETUP]: '4 of 6',
-    [OnboardingStep.BASIC_PROFILE]: '5 of 6',
-    [OnboardingStep.PROFESSIONAL_DETAILS]: '6 of 6',
+    // Onboarding proper has 6 steps: Category(1) → Type(2) → Location(3) → Profile(4) → Details(5) → Availability(6)
+    [OnboardingStep.WELCOME]: 'Intro',
+    [OnboardingStep.AUTHENTICATION]: 'Intro',
+    [OnboardingStep.CATEGORY_SELECTION]: '1 of 6',
+    [OnboardingStep.TYPE_SELECTION]: '2 of 6',
+    [OnboardingStep.LOCATION_SETUP]: '3 of 6',
+    [OnboardingStep.BASIC_PROFILE]: '4 of 6',
+    [OnboardingStep.PROFESSIONAL_DETAILS]: '5 of 6',
     [OnboardingStep.AVAILABILITY_SETUP]: '6 of 6',
     [OnboardingStep.REGISTRATION_COMPLETE]: 'Complete'
   };

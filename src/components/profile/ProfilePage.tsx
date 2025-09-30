@@ -15,6 +15,13 @@ import {
   ListItemText,
   ListItemIcon,
   IconButton,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import VerifiedIcon from '@mui/icons-material/Verified';
@@ -22,6 +29,7 @@ import InstagramIcon from '@mui/icons-material/Instagram';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { TierType, ProfileSection } from '../../types/enums';
 import { useAppStore } from '../../store/appStore';
 import { RatingDisplay } from '../common/RatingDisplay';
@@ -29,6 +37,8 @@ import { StatusChip } from '../common/StatusChip';
 import { formatCurrency } from '../../utils/formatters';
 import { ProfileManagementContainer } from './ProfileManagementContainer';
 import { mockUserProfile } from '../../data/profileManagementMockData';
+import { useNavigate } from 'react-router-dom';
+import { supabaseAuth } from '../../services/auth/supabaseAuth';
 
 const StyledContainer = styled(Container)(({ theme }) => ({
   paddingTop: theme.spacing(2),
@@ -54,9 +64,13 @@ const ProBadge = styled(Box)(({ theme }) => ({
 }));
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAppStore();
+  const { user, setAuthenticated, setUser } = useAppStore();
+  const navigate = useNavigate();
   const [showProfileManagement, setShowProfileManagement] = useState(false);
   const [initialSection, setInitialSection] = useState<ProfileSection | null>(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [logoutSnackbarOpen, setLogoutSnackbarOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   // Use mock user if no user in store (for preview purposes)
   const currentUser = user || mockUserProfile;
@@ -84,6 +98,34 @@ export const ProfilePage: React.FC = () => {
   const handleTierUpgraded = () => {
     // In a real app, this would update the user's tier
     console.log('Tier upgraded to Pro');
+  };
+  
+  const handleLogoutClick = () => {
+    setLogoutDialogOpen(true);
+  };
+
+  const handleLogoutCancel = () => {
+    setLogoutDialogOpen(false);
+  };
+
+  const handleLogoutConfirm = async () => {
+    try {
+      setLogoutDialogOpen(false);
+      await supabaseAuth.signOut();
+      // Clear user data from store
+      setAuthenticated(false);
+      setUser(null);
+      // Show success message
+      setLogoutSnackbarOpen(true);
+      // Redirect to welcome page after a short delay
+      setTimeout(() => {
+        navigate('/welcome');
+      }, 1500);
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      setLogoutError(error.message || 'Failed to log out. Please try again.');
+      setLogoutSnackbarOpen(true);
+    }
   };
 
   if (showProfileManagement) {
@@ -155,11 +197,20 @@ export const ProfilePage: React.FC = () => {
                 Edit Profile
               </Button>
               <IconButton 
-                size="small" 
-                onClick={() => handleManageProfile(ProfileSection.TIER)}
-              >
-                <SettingsIcon />
-              </IconButton>
+                  size="small" 
+                  onClick={() => handleManageProfile(ProfileSection.PRIVACY)}
+                  aria-label="Settings"
+                >
+                  <SettingsIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={handleLogoutClick}
+                  color="error"
+                  aria-label="Logout"
+                >
+                  <LogoutIcon />
+                </IconButton>
             </Stack>
           </Stack>
         </ProfileHeader>
@@ -351,9 +402,60 @@ export const ProfilePage: React.FC = () => {
                 secondary="Manage your privacy settings and notifications"
               />
             </ListItemButton>
+            
+            <Divider />
+            
+            <ListItemButton onClick={handleLogoutClick}>
+              <ListItemIcon>
+                <LogoutIcon color="error" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Logout"
+                secondary="Sign out of your account"
+              />
+            </ListItemButton>
           </List>
         </Paper>
       </Stack>
+      
+      {/* Logout Confirmation Dialog */}
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={handleLogoutCancel}
+        aria-labelledby="logout-dialog-title"
+        aria-describedby="logout-dialog-description"
+      >
+        <DialogTitle id="logout-dialog-title">
+          Confirm Logout
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="logout-dialog-description">
+            Are you sure you want to log out of your account?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleLogoutCancel}>Cancel</Button>
+          <Button onClick={handleLogoutConfirm} color="error" variant="contained" autoFocus>
+            Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Logout Feedback Snackbar */}
+      <Snackbar 
+        open={logoutSnackbarOpen} 
+        autoHideDuration={3000} 
+        onClose={() => setLogoutSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setLogoutSnackbarOpen(false)} 
+          severity={logoutError ? "error" : "success"} 
+          sx={{ width: '100%' }}
+        >
+          {logoutError || "Successfully logged out!"}
+        </Alert>
+      </Snackbar>
     </StyledContainer>
   );
 };

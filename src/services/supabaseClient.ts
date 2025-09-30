@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// These would typically come from environment variables
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'your-supabase-url';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key';
+// Read Supabase config from Vite env vars
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || 'https://YOUR-PROJECT.supabase.co',
+  supabaseAnonKey || 'YOUR-ANON-KEY'
+);
 
 // Community Poses related types and functions
 export interface CommunityPose {

@@ -34,41 +34,52 @@ export const getCurrentPosition = (): Promise<GeolocationResult> => {
       return;
     }
 
-    const options: PositionOptions = {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 300000 // 5 minutes
+    const attemptGet = (opts: PositionOptions) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            coordinates: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            },
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => {
+          // If position unavailable or timeout, try a more relaxed second attempt
+          if (error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT) {
+            const fallbackOpts: PositionOptions = {
+              enableHighAccuracy: false,
+              timeout: 20000,
+              maximumAge: 600000 // 10 minutes
+            };
+            // Only retry if we haven't already relaxed options
+            if (opts.enableHighAccuracy) {
+              attemptGet(fallbackOpts);
+              return;
+            }
+          }
+
+          let errorMessage = 'Failed to get location';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location access denied by user. Please check your browser settings and ensure location access is enabled.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable. Ensure location services are ON and try again.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out. Check connectivity and try again.';
+              break;
+          }
+          reject(new Error(errorMessage));
+        },
+        opts
+      );
     };
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          coordinates: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          },
-          accuracy: position.coords.accuracy
-        });
-      },
-      (error) => {
-        let errorMessage = 'Failed to get location';
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'Location access denied by user. Please check your browser settings and ensure location access is enabled.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'Location request timed out';
-            break;
-        }
-        
-        reject(new Error(errorMessage));
-      },
-      options
-    );
+    // First attempt: high accuracy
+    attemptGet({ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
   });
 };
 

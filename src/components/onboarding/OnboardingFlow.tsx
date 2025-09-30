@@ -14,6 +14,8 @@ import { AvailabilitySetupScreen } from './AvailabilitySetupScreen';
 import { RegistrationCompleteScreen } from './RegistrationCompleteScreen';
 import { User } from '../../types';
 import { analyticsService } from '../../utils/analyticsEvents';
+import { onboardingService } from '../../services/onboardingService';
+import { supabase } from '../../services/supabaseClient';
 
 interface OnboardingFlowProps {
   onRegistrationComplete: (user: User) => void;
@@ -44,7 +46,43 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
   useEffect(() => {
     setRegistrationStatus(RegistrationStatus.IN_PROGRESS);
+    // Ensure a profiles row exists for the authenticated user
+    (async () => {
+      try {
+        await onboardingService.ensureProfileExists();
+      } catch (err: any) {
+        console.error('ensureProfileExists error:', err);
+      }
+    })();
   }, [setRegistrationStatus]);
+
+  // Auto-populate full name and phone from auth when entering Basic Profile
+  useEffect(() => {
+    const prefillFromAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const sbUser = data.user;
+        if (!sbUser) return;
+        const name = sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || '';
+        const phone = sbUser.phone || '';
+        // Only update if fields are empty to avoid overriding user input
+        if (!registrationData.basicProfile.fullName || !registrationData.basicProfile.primaryMobile) {
+          updateRegistrationData({
+            basicProfile: {
+              ...registrationData.basicProfile,
+              fullName: registrationData.basicProfile.fullName || name,
+              primaryMobile: registrationData.basicProfile.primaryMobile || phone,
+            }
+          });
+        }
+      } catch (err) {
+        // Silent fail; keep form editable
+      }
+    };
+    if (currentStep === OnboardingStep.BASIC_PROFILE) {
+      prefillFromAuth();
+    }
+  }, [currentStep, registrationData.basicProfile.fullName, registrationData.basicProfile.primaryMobile, updateRegistrationData]);
 
   // Navigation helpers
   const navigateToStep = (step: OnboardingStep) => {
@@ -102,7 +140,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     navigateToStep(prevStep);
   };
 
-  const handleStepComplete = (stepData?: any) => {
+  const handleStepComplete = async (stepData?: any) => {
+    try {
+      await onboardingService.completeStep(String(currentStep));
+    } catch (err: any) {
+      analyticsService.trackValidationError(currentStep, 'onboarding_progress', err.message || 'Failed to mark step');
+    }
     addCompletedStep(currentStep);
     if (stepData) {
       updateRegistrationData(stepData);
@@ -110,37 +153,110 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     goToNextStep();
   };
 
-  const handleCategorySelect = (category: any) => {
+  const handleCategorySelect = async (category: any) => {
+    try {
+      await onboardingService.upsertProfessionalProfile({ selectedCategory: category });
+      await onboardingService.completeStep('CATEGORY_SELECTION');
+      analyticsService.trackStepCompleted(OnboardingStep.CATEGORY_SELECTION, { category });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.CATEGORY_SELECTION, 'service', err.message || 'Failed to save category');
+    }
     updateRegistrationData({ selectedCategory: category });
     addCompletedStep(OnboardingStep.CATEGORY_SELECTION);
     navigateToStep(OnboardingStep.TYPE_SELECTION);
   };
 
-  const handleTypeSelect = (type: string) => {
+  const handleTypeSelect = async (type: string) => {
+    try {
+      await onboardingService.upsertProfessionalProfile({ selectedType: type });
+      await onboardingService.completeStep('TYPE_SELECTION');
+      analyticsService.trackStepCompleted(OnboardingStep.TYPE_SELECTION, { type });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.TYPE_SELECTION, 'service', err.message || 'Failed to save type');
+    }
     updateRegistrationData({ selectedType: type });
     addCompletedStep(OnboardingStep.TYPE_SELECTION);
     navigateToStep(OnboardingStep.LOCATION_SETUP);
   };
 
-  const handleLocationUpdate = (locationData: any) => {
+  const handleLocationUpdate = async (locationData: any) => {
+    // Map DistanceRadius enum to numeric km if available
+    const radiusMap: Record<string, number> = {
+      '5_km': 5,
+      '10_km': 10,
+      '25_km': 25,
+      '50_km': 50,
+      '100_km': 100,
+    };
+    const workRadiusKm = radiusMap[String(locationData.workRadius)] || 25;
+    try {
+      await onboardingService.upsertLocation({
+        city: locationData.city,
+        state: locationData.state,
+        pinCode: locationData.pinCode,
+        workRadiusKm,
+        additionalLocations: (locationData.additionalLocations || []).map((s: string) => ({ city: s }))
+      });
+      await onboardingService.completeStep('LOCATION_SETUP');
+      analyticsService.trackStepCompleted(OnboardingStep.LOCATION_SETUP, { city: locationData.city, state: locationData.state });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.LOCATION_SETUP, 'service', err.message || 'Failed to save location');
+    }
     updateRegistrationData({ location: locationData });
     addCompletedStep(OnboardingStep.LOCATION_SETUP);
     navigateToStep(OnboardingStep.BASIC_PROFILE);
   };
 
-  const handleProfileUpdate = (profileData: any) => {
+  const handleProfileUpdate = async (profileData: any) => {
+    try {
+      await onboardingService.upsertBasicProfile({
+        fullName: profileData.fullName,
+        avatarUrl: profileData.profilePhotoUrl,
+        phone: profileData.primaryMobile,
+      });
+      await onboardingService.completeStep('BASIC_PROFILE');
+      analyticsService.trackStepCompleted(OnboardingStep.BASIC_PROFILE, { hasProfilePhoto: !!profileData.profilePhotoUrl });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.BASIC_PROFILE, 'service', err.message || 'Failed to save profile');
+    }
     updateRegistrationData({ basicProfile: profileData });
     addCompletedStep(OnboardingStep.BASIC_PROFILE);
     navigateToStep(OnboardingStep.PROFESSIONAL_DETAILS);
   };
 
-  const handleDetailsUpdate = (detailsData: any) => {
+  const handleDetailsUpdate = async (detailsData: any) => {
+    try {
+      await onboardingService.upsertProfessionalProfile({
+        experienceLevel: detailsData.experienceLevel,
+        specializations: detailsData.specializations,
+        pricing: detailsData.pricing,
+        equipment: detailsData.equipment,
+        instagramHandle: detailsData.instagramHandle,
+        portfolioLinks: detailsData.portfolioLinks,
+      });
+      await onboardingService.completeStep('PROFESSIONAL_DETAILS');
+      analyticsService.trackStepCompleted(OnboardingStep.PROFESSIONAL_DETAILS, { specializationCount: detailsData.specializations?.length || 0 });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.PROFESSIONAL_DETAILS, 'service', err.message || 'Failed to save details');
+    }
     updateRegistrationData({ professionalDetails: detailsData });
     addCompletedStep(OnboardingStep.PROFESSIONAL_DETAILS);
     navigateToStep(OnboardingStep.AVAILABILITY_SETUP);
   };
 
-  const handleAvailabilityUpdate = (availabilityData: any) => {
+  const handleAvailabilityUpdate = async (availabilityData: any) => {
+    try {
+      await onboardingService.upsertAvailability({
+        defaultSchedule: availabilityData.defaultSchedule,
+        leadTime: availabilityData.leadTime,
+        advanceBookingLimit: availabilityData.advanceBookingLimit,
+        calendarVisibility: availabilityData.calendarVisibility,
+      });
+      await onboardingService.completeStep('AVAILABILITY_SETUP');
+      analyticsService.trackStepCompleted(OnboardingStep.AVAILABILITY_SETUP, { });
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.AVAILABILITY_SETUP, 'service', err.message || 'Failed to save availability');
+    }
     updateRegistrationData({ availability: availabilityData });
     addCompletedStep(OnboardingStep.AVAILABILITY_SETUP);
     navigateToStep(OnboardingStep.REGISTRATION_COMPLETE);
@@ -206,10 +322,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
   };
 
-  const handleRegistrationComplete = () => {
+  const handleRegistrationComplete = async () => {
     // Create user object from registration data
+    let supabaseUserId = 'user_' + Date.now();
+    try {
+      supabaseUserId = await onboardingService.getCurrentUserId();
+      await onboardingService.completeStep('REGISTRATION_COMPLETE');
+    } catch (err: any) {
+      analyticsService.trackValidationError(OnboardingStep.REGISTRATION_COMPLETE, 'service', err.message || 'Failed to finalize onboarding');
+    }
     const user: User = {
-      id: 'user_' + Date.now(),
+      id: supabaseUserId,
       name: registrationData.basicProfile.fullName,
       email: registrationData.email,
       phone: registrationData.basicProfile.primaryMobile,

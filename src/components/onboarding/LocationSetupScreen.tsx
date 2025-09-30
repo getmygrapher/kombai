@@ -91,12 +91,16 @@ export const LocationSetupScreen: React.FC<LocationSetupScreenProps> = ({
     setGpsError('');
     
     try {
-      // First check if location permission is available
+      // Check basic capability issues first (non-HTTPS or unsupported)
       const permissionStatus = await checkLocationPermission();
-      if (!permissionStatus.granted && permissionStatus.error) {
-        throw new Error(permissionStatus.error);
+      if (permissionStatus.error === 'Geolocation not supported') {
+        throw new Error('Geolocation is not supported by this browser');
       }
-      
+      if (permissionStatus.error === 'Geolocation requires a secure context (HTTPS)') {
+        throw new Error('Geolocation requires a secure context (HTTPS). Please use HTTPS to access this site.');
+      }
+
+      // Attempt to get current position regardless of prompt state
       const position = await getCurrentPosition();
       const address = await reverseGeocode(position.coordinates);
       

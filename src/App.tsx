@@ -35,6 +35,7 @@ import { mockRootProps } from './data/communityPosingLibraryMockData';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { AuthenticationScreen } from './components/auth/AuthenticationScreen';
 import { sessionManager } from './services/auth/session';
+import { onboardingService } from './services/onboardingService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -75,6 +76,7 @@ const App: React.FC = () => {
   const { setCurrentlyViewingProfile, clearProfileViewState } = useProfileViewStore();
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
   
   // Derive moderator flag (mock)
   const isModerator = mockRootProps.isModerator;
@@ -83,12 +85,27 @@ const App: React.FC = () => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (sessionManager.isSessionValid()) {
-          const session = sessionManager.getSession();
-          if (session) {
-            setUser(session.user);
-            setAuthenticated(true);
-          }
+        const { data } = await import('./services/supabaseClient').then(m => m.supabase.auth.getSession());
+        const session = data.session;
+        if (session) {
+          const sbUser = session.user;
+          const user = {
+            id: sbUser.id,
+            name: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || '',
+            email: sbUser.email || '',
+            phone: sbUser.phone || '',
+            profilePhoto: sbUser.user_metadata?.avatar_url || '',
+            professionalCategory: 'Photography' as any,
+            professionalType: 'Portrait Photographer',
+            location: { city: '', state: '', coordinates: { lat: 0, lng: 0 } },
+            tier: 'Free' as any,
+            rating: 0,
+            totalReviews: 0,
+            isVerified: !!sbUser.email_confirmed_at,
+            joinedDate: sbUser.created_at,
+          } as any;
+          setUser(user);
+          setAuthenticated(true);
         } else {
           setAuthenticated(false);
         }
@@ -158,6 +175,43 @@ const App: React.FC = () => {
       setCurrentStep(step);
     }
   }, [location.pathname, isAuthenticated, setCurrentStep]);
+
+  // After auth, check onboarding status to determine redirects and route guards
+  useEffect(() => {
+    if (!authInitialized) return;
+    if (isAuthenticated) {
+      (async () => {
+        try {
+          const status = await onboardingService.getStatus();
+          const completed = status?.status === 'completed' || status?.current_step === 'REGISTRATION_COMPLETE';
+          setOnboardingCompleted(!!completed);
+          // If user is authenticated and not completed onboarding, ensure they are on onboarding route
+          if (!completed && !location.pathname.startsWith('/onboarding')) {
+            const stepToPath: Record<string, string> = {
+              CATEGORY_SELECTION: '/onboarding/category',
+              TYPE_SELECTION: '/onboarding/type',
+              LOCATION_SETUP: '/onboarding/location',
+              BASIC_PROFILE: '/onboarding/basic-profile',
+              PROFESSIONAL_DETAILS: '/onboarding/professional-details',
+              AVAILABILITY_SETUP: '/onboarding/availability',
+              REGISTRATION_COMPLETE: '/home',
+            };
+            const target = status?.current_step ? (stepToPath[status.current_step] || '/onboarding/category') : '/onboarding/category';
+            navigate(target, { replace: true });
+          }
+          // If completed but currently under onboarding path, redirect home
+          if (completed && location.pathname.startsWith('/onboarding')) {
+            navigate('/home', { replace: true });
+          }
+        } catch {
+          setOnboardingCompleted(false);
+        }
+      })();
+    } else {
+      setOnboardingCompleted(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authInitialized, isAuthenticated]);
 
   // Handler functions for HomePage
   const handleJobDetails = (jobId: string) => {
@@ -358,7 +412,11 @@ const App: React.FC = () => {
               path="/welcome"
               element={
                 isAuthenticated ? (
-                  <Navigate to="/home" replace />
+                  onboardingCompleted ? (
+                    <Navigate to="/home" replace />
+                  ) : (
+                    <Navigate to="/onboarding/category" replace />
+                  )
                 ) : (
                   <Box sx={{ minHeight: '100vh' }}>
                     <WelcomeScreen onContinue={() => navigate('/auth')} />
@@ -370,7 +428,11 @@ const App: React.FC = () => {
               path="/auth"
               element={
                 isAuthenticated ? (
-                  <Navigate to="/home" replace />
+                  onboardingCompleted ? (
+                    <Navigate to="/home" replace />
+                  ) : (
+                    <Navigate to="/onboarding/category" replace />
+                  )
                 ) : (
                   <Box sx={{ minHeight: '100vh' }}>
                     <AuthenticationScreen onAuthSuccess={handleAuthSuccessTopLevel} />
@@ -381,10 +443,10 @@ const App: React.FC = () => {
 
             {/* Onboarding Routes */}
             <Route path="/onboarding/*" element={
-              !isAuthenticated ? (
-                <OnboardingFlow onRegistrationComplete={handleRegistrationComplete} />
-              ) : (
+              isAuthenticated && onboardingCompleted ? (
                 <Navigate to="/home" replace />
+              ) : (
+                <OnboardingFlow onRegistrationComplete={handleRegistrationComplete} />
               )
             } />
             
@@ -570,7 +632,11 @@ const App: React.FC = () => {
             {/* Default redirect */}
             <Route path="/" element={
               isAuthenticated ? (
-                <Navigate to="/home" replace />
+                onboardingCompleted ? (
+                  <Navigate to="/home" replace />
+                ) : (
+                  <Navigate to="/onboarding/category" replace />
+                )
               ) : (
                 <Navigate to="/welcome" replace />
               )

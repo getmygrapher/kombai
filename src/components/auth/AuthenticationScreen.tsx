@@ -17,9 +17,10 @@ import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '@mui/icons-material/Google';
 import { User } from '../../types';
 import { OnboardingStep } from '../../types/onboarding';
-import { googleAuthAdapter } from '../../services/auth/googleAuth';
 import { sessionManager } from '../../services/auth/session';
+import { supabaseAuth } from '../../services/auth/supabaseAuth';
 import { analyticsService } from '../../utils/analyticsEvents';
+import { onboardingService } from '../../services/onboardingService';
 
 interface AuthenticationScreenProps {
   onAuthSuccess: (user: User) => void;
@@ -47,42 +48,69 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 }) => {
   const navigate = useNavigate();
   const [isEmailAuth, setIsEmailAuth] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const stepToPath: Record<string, string> = {
+    CATEGORY_SELECTION: '/onboarding/category',
+    TYPE_SELECTION: '/onboarding/type',
+    LOCATION_SETUP: '/onboarding/location',
+    BASIC_PROFILE: '/onboarding/basic-profile',
+    PROFESSIONAL_DETAILS: '/onboarding/professional-details',
+    AVAILABILITY_SETUP: '/onboarding/availability',
+    REGISTRATION_COMPLETE: '/home',
+  };
+  const pathForStep = (step?: string) => step ? (stepToPath[step] || '/onboarding/category') : '/onboarding/category';
 
   useEffect(() => {
     analyticsService.trackStepViewed(OnboardingStep.AUTHENTICATION);
-    // Initialize Google Auth
-    googleAuthAdapter.initialize();
-  }, []);
+    const { data: subscription } = supabaseAuth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        const user = supabaseAuth.mapUserFromSession(session);
+        if (user) {
+          const expiresAtMs = (session.expires_at || 0) * 1000;
+          sessionManager.storeSession({
+            user,
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token || '',
+            expiresAt: expiresAtMs,
+          });
+          analyticsService.trackStepCompleted(OnboardingStep.AUTHENTICATION, {
+            method: 'supabase',
+            email: user.email,
+          });
+          onAuthSuccess(user);
+          // Decide post-auth route based on onboarding status
+          void (async () => {
+            try {
+              const status = await onboardingService.getStatus();
+              const isCompleted = status?.status === 'completed' || status?.current_step === 'REGISTRATION_COMPLETE';
+              if (isCompleted) {
+                navigate('/home');
+              } else {
+                navigate(pathForStep(status?.current_step));
+              }
+            } catch {
+              navigate('/onboarding/category');
+            }
+          })();
+        }
+      }
+    });
+    return () => {
+      subscription.subscription.unsubscribe();
+    };
+  }, [navigate, onAuthSuccess]);
 
   const handleGoogleAuth = async () => {
     setLoading(true);
     setError('');
-    
     try {
       analyticsService.trackAuthMethod('google');
-      const authResponse = await googleAuthAdapter.signIn();
-      
-      // Store session
-      const sessionData = {
-        user: authResponse.user,
-        accessToken: authResponse.accessToken,
-        refreshToken: authResponse.refreshToken,
-        expiresAt: Date.now() + (authResponse.expiresIn * 1000)
-      };
-      
-      sessionManager.storeSession(sessionData);
-      
-      analyticsService.trackStepCompleted(OnboardingStep.AUTHENTICATION, {
-        method: 'google',
-        email: authResponse.user.email
-      });
-      
-      onAuthSuccess(authResponse.user);
-      navigate('/onboarding/category');
+      await supabaseAuth.signInWithGoogle();
+      // Supabase will redirect; session handling occurs via onAuthStateChange
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to authenticate with Google';
       setError(errorMessage);
@@ -104,51 +132,42 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
     }
 
     try {
-      analyticsService.trackAuthMethod('email');
-      
-      // Simulate email authentication
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock user for email auth
-      const user: User = {
-        id: `email_${Date.now()}`,
-        name: email.split('@')[0],
-        email: email,
-        phone: '',
-        profilePhoto: 'https://i.pravatar.cc/150?img=2',
-        professionalCategory: 'Photography' as any,
-        professionalType: 'Portrait Photographer',
-        location: {
-          city: '',
-          state: '',
-          coordinates: { lat: 0, lng: 0 }
-        },
-        tier: 'Free' as any,
-        rating: 0,
-        totalReviews: 0,
-        isVerified: false,
-        joinedDate: new Date().toISOString()
-      };
-
-      // Store session
-      const sessionData = {
-        user,
-        accessToken: `email_token_${Date.now()}`,
-        refreshToken: `email_refresh_${Date.now()}`,
-        expiresAt: Date.now() + (3600 * 1000) // 1 hour
-      };
-      
-      sessionManager.storeSession(sessionData);
-      
-      analyticsService.trackStepCompleted(OnboardingStep.AUTHENTICATION, {
-        method: 'email',
-        email: email
-      });
-      
-      onAuthSuccess(user);
-      navigate('/onboarding/category');
-    } catch (err) {
-      const errorMessage = 'Invalid email or password';
+      analyticsService.trackAuthMethod(isSignUp ? 'email_signup' : 'email_login');
+      if (isSignUp) {
+        await supabaseAuth.signUpWithEmail(email, password);
+        // Supabase sends verification email; prompt user
+        setError('Check your email to verify your account.');
+      } else {
+        const { session } = await supabaseAuth.signInWithEmail(email, password);
+        const user = supabaseAuth.mapUserFromSession(session || null);
+        if (session && user) {
+          sessionManager.storeSession({
+            user,
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token || '',
+            expiresAt: (session.expires_at || 0) * 1000,
+          });
+          analyticsService.trackStepCompleted(OnboardingStep.AUTHENTICATION, {
+            method: 'email',
+            email,
+          });
+          onAuthSuccess(user);
+          // Decide post-auth route based on onboarding status
+          try {
+            const status = await onboardingService.getStatus();
+            const isCompleted = status?.status === 'completed' || status?.current_step === 'REGISTRATION_COMPLETE';
+            if (isCompleted) {
+              navigate('/home');
+            } else {
+              navigate(pathForStep(status?.current_step));
+            }
+          } catch {
+            navigate('/onboarding/category');
+          }
+        }
+      }
+    } catch (err: any) {
+      const errorMessage = err.message || (isSignUp ? 'Sign up failed' : 'Invalid email or password');
       setError(errorMessage);
       analyticsService.trackValidationError(OnboardingStep.AUTHENTICATION, 'email_auth', errorMessage);
     } finally {
@@ -218,13 +237,38 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Button
+                  variant="text"
+                  onClick={() => setIsSignUp((s) => !s)}
+                >
+                  {isSignUp ? 'Switch to Sign In' : 'Switch to Sign Up'}
+                </Button>
+                <Button
+                  variant="text"
+                  onClick={async () => {
+                    if (!email) {
+                      setError('Enter your email to reset password');
+                      return;
+                    }
+                    try {
+                      await supabaseAuth.requestPasswordReset(email);
+                      setError('Password reset email sent. Check your inbox.');
+                    } catch (err: any) {
+                      setError(err.message || 'Failed to send reset email');
+                    }
+                  }}
+                >
+                  Forgot password?
+                </Button>
+              </Stack>
               <Button
                 fullWidth
                 variant="contained"
                 type="submit"
                 disabled={loading as any}
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? (isSignUp ? 'Signing up...' : 'Signing in...') : (isSignUp ? 'Sign Up' : 'Sign In')}
               </Button>
               <Button
                 fullWidth
