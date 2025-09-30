@@ -24,6 +24,11 @@ create table if not exists public.professional_profiles (
 
 alter table public.professional_profiles enable row level security;
 
+-- Drop existing policies to avoid conflicts
+drop policy if exists "Users can select own professional profile" on public.professional_profiles;
+drop policy if exists "Users can upsert own professional profile" on public.professional_profiles;
+drop policy if exists "Users can update own professional profile" on public.professional_profiles;
+
 create policy "Users can select own professional profile"
   on public.professional_profiles for select
   using (auth.uid() = user_id);
@@ -55,6 +60,11 @@ create table if not exists public.availability_settings (
 
 alter table public.availability_settings enable row level security;
 
+-- Drop existing policies to avoid conflicts
+drop policy if exists "Users can select own availability settings" on public.availability_settings;
+drop policy if exists "Users can upsert own availability settings" on public.availability_settings;
+drop policy if exists "Users can update own availability settings" on public.availability_settings;
+
 create policy "Users can select own availability settings"
   on public.availability_settings for select
   using (auth.uid() = user_id);
@@ -84,6 +94,11 @@ create table if not exists public.onboarding_progress (
 
 alter table public.onboarding_progress enable row level security;
 
+-- Drop existing policies to avoid conflicts
+drop policy if exists "Users can select own onboarding progress" on public.onboarding_progress;
+drop policy if exists "Users can insert own onboarding progress" on public.onboarding_progress;
+drop policy if exists "Users can update own onboarding progress" on public.onboarding_progress;
+
 create policy "Users can select own onboarding progress"
   on public.onboarding_progress for select
   using (auth.uid() = user_id);
@@ -110,6 +125,7 @@ set search_path = public
 as $$
 declare
   uid uuid := auth.uid();
+  result public.onboarding_progress;
 begin
   if uid is null then
     raise exception 'Unauthorized';
@@ -127,7 +143,9 @@ begin
     status = (case when step = 'REGISTRATION_COMPLETE' then 'completed' else op.status end),
     updated_at = now()
   where op.user_id = uid
-  returning *;
+  returning * into result;
+  
+  return result;
 end;
 $$;
 

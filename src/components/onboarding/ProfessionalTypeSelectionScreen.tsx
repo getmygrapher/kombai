@@ -123,23 +123,29 @@ export const ProfessionalTypeSelectionScreen: React.FC<ProfessionalTypeSelection
   onNext,
   onBack
 }) => {
-  const availableTypes = useMemo(() => getTypesForCategory(selectedCategory), [selectedCategory]);
+  const availableTypes = useMemo(() => {
+    return selectedCategory ? getTypesForCategory(selectedCategory) : [];
+  }, [selectedCategory]);
 
   useEffect(() => {
-    analyticsService.trackStepViewed(OnboardingStep.TYPE_SELECTION, {
-      selectedCategory
-    });
+    if (selectedCategory) {
+      analyticsService.trackStepViewed(OnboardingStep.TYPE_SELECTION, {
+        selectedCategory
+      });
+    }
   }, [selectedCategory]);
 
   const handleTypeSelect = (type: string) => {
     onTypeSelect(type);
-    analyticsService.trackTypeSelected(selectedCategory, type);
+    if (selectedCategory) {
+      analyticsService.trackTypeSelected(selectedCategory, type);
+    }
   };
 
   const handleNext = () => {
     if (selectedType) {
       analyticsService.trackStepCompleted(OnboardingStep.TYPE_SELECTION, {
-        selectedCategory,
+        selectedCategory: selectedCategory || 'Unknown',
         selectedType
       });
       onNext();
@@ -154,18 +160,20 @@ export const ProfessionalTypeSelectionScreen: React.FC<ProfessionalTypeSelection
         {/* Header */}
         <Fade in timeout={600}>
           <Box textAlign="center">
-            <CategoryChip 
-              label={selectedCategory} 
-              size="small" 
-              sx={{ mb: 2 }}
-            />
+            {selectedCategory && (
+              <CategoryChip 
+                label={selectedCategory} 
+                size="small" 
+                sx={{ mb: 2 }}
+              />
+            )}
             <Typography 
               variant="h4" 
               component="h1" 
               gutterBottom
               sx={{ fontWeight: 600, color: 'text.primary' }}
             >
-              What type of {selectedCategory.toLowerCase()} do you specialize in?
+              What type of {selectedCategory?.toLowerCase() || 'service'} do you specialize in?
             </Typography>
             <Typography 
               variant="body1" 
