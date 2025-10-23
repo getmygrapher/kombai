@@ -8,7 +8,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAppStore } from './store/appStore';
 import { useOnboardingStore } from './store/onboardingStore';
 import { useProfileViewStore } from './store/profileViewStore';
-import { AppBottomNavigation } from './components/navigation/BottomNavigation';
+
 import { EnhancedHomePage } from './components/homepage/EnhancedHomePage';
 import { SearchPage } from './components/search/SearchPage';
 import { JobsPage } from './components/jobs/JobsPage';
@@ -20,6 +20,8 @@ import { CalendarPage } from './components/calendar/CalendarPage';
 import { EnhancedMessagesPage } from './components/messages/EnhancedMessagesPage';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { EnhancedProfileViewContainer } from './components/profile/EnhancedProfileViewContainer';
+import { ResponsiveNavigation } from './components/navigation/ResponsiveNavigation';
+import { useTheme, useMediaQuery } from '@mui/material';
 // Remove old landing component import and switch to routed pages
 // import { CommunityPosingLibrary } from './components/community/CommunityPosingLibrary';
 const CommunityFeedPage = React.lazy(() => import('./pages/community/CommunityFeedPage').then(m => ({ default: m.CommunityFeedPage })));
@@ -673,6 +675,8 @@ interface MainAppLayoutProps {
 
 const MainAppLayout: React.FC<MainAppLayoutProps> = ({ children, currentTab, setCurrentTab }) => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
 
   const handleTabChange = (tab: string) => {
     setCurrentTab(tab);
@@ -687,28 +691,39 @@ const MainAppLayout: React.FC<MainAppLayoutProps> = ({ children, currentTab, set
     <Box
       sx={{
         display: 'flex',
-        flexDirection: 'column',
         minHeight: '100vh',
         backgroundColor: 'background.default',
+        ...(isDesktop && {
+          flexDirection: 'row',
+          pl: 9, // Space for sidebar navigation
+        }),
+        ...(!isDesktop && {
+          flexDirection: 'column',
+        }),
       }}
     >
+      {/* Responsive Navigation */}
+      <ResponsiveNavigation
+        value={currentTab}
+        onChange={handleTabChange}
+      />
+
       {/* Main Content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          pb: 8, // Space for bottom navigation
+          ...(!isDesktop && {
+            pb: 8, // Space for bottom navigation on mobile
+          }),
+          ...(isDesktop && {
+            pb: 0, // No bottom padding needed on desktop
+          }),
           overflow: 'hidden',
         }}
       >
         {children}
       </Box>
-
-      {/* Bottom Navigation */}
-      <AppBottomNavigation
-        value={currentTab}
-        onChange={handleTabChange}
-      />
     </Box>
   );
 };
