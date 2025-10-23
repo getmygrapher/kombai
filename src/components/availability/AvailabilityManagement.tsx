@@ -16,7 +16,7 @@ import PollOutlinedIcon from '@mui/icons-material/PollOutlined';
 import { AvailabilityCalendar } from './AvailabilityCalendar';
 import { RecurringPatternManager } from './RecurringPatternManager';
 import { useAvailabilityStore } from '../../store/availabilityStore';
-import { useCalendarEntries, useRecurringPatterns, useUpdateAvailability } from '../../hooks/useAvailability';
+import { useCalendarEntries, useRecurringPatterns, useUpdateAvailability, useCurrentUser } from '../../hooks/useAvailability';
 import { 
   CalendarViewMode, 
   TimeSlot, 
@@ -79,9 +79,13 @@ export const AvailabilityManagement: React.FC = () => {
     setViewMode,
   } = useAvailabilityStore();
 
+  // Get current authenticated user
+  const { data: currentUser, isLoading: userLoading, error: userError } = useCurrentUser();
+  const userId = currentUser?.id;
+
   // API hooks
-  const { data: calendarEntries = [], isLoading: calendarLoading, error: calendarError } = useCalendarEntries('user_123');
-  const { data: recurringPatterns = [], isLoading: patternsLoading } = useRecurringPatterns('user_123');
+  const { data: calendarEntries = [], isLoading: calendarLoading, error: calendarError } = useCalendarEntries(userId || '');
+  const { data: recurringPatterns = [], isLoading: patternsLoading } = useRecurringPatterns(userId || '');
   const updateAvailabilityMutation = useUpdateAvailability();
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -99,10 +103,12 @@ export const AvailabilityManagement: React.FC = () => {
   };
 
   const handleAvailabilityUpdate = async (dates: Date[], timeSlots: TimeSlot[]) => {
+    if (!userId) return;
+    
     try {
       for (const date of dates) {
         await updateAvailabilityMutation.mutateAsync({
-          userId: 'user_123',
+          userId,
           date: date.toISOString(),
           timeSlots,
           status: timeSlots.length > 0 ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.UNAVAILABLE,
@@ -145,10 +151,34 @@ export const AvailabilityManagement: React.FC = () => {
     console.log('Preview pattern:', pattern);
   };
 
+  if (userError) {
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        Authentication error. Please log in to access your availability calendar.
+      </Alert>
+    );
+  }
+
   if (calendarError) {
     return (
       <Alert severity="error" sx={{ m: 2 }}>
         Failed to load calendar data. Please try again.
+      </Alert>
+    );
+  }
+
+  if (userLoading) {
+    return (
+      <LoadingContainer>
+        <CircularProgress />
+      </LoadingContainer>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <Alert severity="warning" sx={{ m: 2 }}>
+        Please log in to manage your availability.
       </Alert>
     );
   }

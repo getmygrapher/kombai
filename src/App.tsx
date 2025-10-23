@@ -38,6 +38,7 @@ import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { AuthenticationScreen } from './components/auth/AuthenticationScreen';
 import { sessionManager } from './services/auth/session';
 import { onboardingService } from './services/onboardingService';
+import { AvailabilityService } from './services/availabilityService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -108,6 +109,9 @@ const App: React.FC = () => {
           } as any;
           setUser(user);
           setAuthenticated(true);
+          
+          // Initialize availability real-time service when user is authenticated
+          AvailabilityService.initializeRealtime();
         } else {
           setAuthenticated(false);
         }
@@ -117,6 +121,13 @@ const App: React.FC = () => {
     };
     initAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cleanup availability real-time service on unmount
+  useEffect(() => {
+    return () => {
+      AvailabilityService.disconnectRealtime();
+    };
   }, []);
 
   // Load draft on app start without overriding current deep link route
@@ -325,6 +336,12 @@ const App: React.FC = () => {
     }))
   );
 
+  const AvailabilityManagement = React.lazy(() => 
+    import('./components/availability/AvailabilityManagement').then(module => ({
+      default: module.AvailabilityManagement
+    }))
+  );
+
   // Tab skeleton loading component
   const TabSkeleton = () => (
     <Stack sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4, minHeight: '300px' }}>
@@ -412,7 +429,7 @@ const App: React.FC = () => {
   
   const AvailabilityRoute = () => (
     <Suspense fallback={<TabSkeleton />}>
-      <AvailabilityWidget />
+      <AvailabilityManagement />
     </Suspense>
   );
 
