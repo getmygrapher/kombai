@@ -161,7 +161,7 @@ AS $$
 DECLARE
   uid uuid := auth.uid();
   pattern_record public.recurring_patterns%ROWTYPE;
-  current_date date;
+  date_cursor date;
   day_name text;
   day_schedule jsonb;
   slot_record jsonb;
@@ -183,15 +183,17 @@ BEGIN
   END IF;
 
   -- Loop through date range
-  current_date := start_date;
-  WHILE current_date <= end_date LOOP
+  date_cursor := start_date;
+  WHILE date_cursor <= end_date LOOP
     -- Skip if date is in exceptions
-    IF NOT (current_date::text = ANY(
-      SELECT jsonb_array_elements_text(pattern_record.exceptions)
-    )) THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(pattern_record.exceptions) AS ex_date
+      WHERE ex_date = date_cursor::text
+    ) THEN
       
       -- Get day name (lowercase)
-      day_name := lower(to_char(current_date, 'Day'));
+      day_name := lower(to_char(date_cursor, 'Day'));
       day_name := trim(day_name);
 
       -- Check if pattern has schedule for this day
@@ -203,7 +205,7 @@ BEGIN
           user_id, date, status, is_recurring, recurring_pattern_id
         )
         VALUES (
-          uid, current_date, 'available', true, pattern_id
+          uid, date_cursor, 'available', true, pattern_id
         )
         ON CONFLICT (user_id, date)
         DO UPDATE SET
@@ -235,7 +237,7 @@ BEGIN
       END IF;
     END IF;
 
-    current_date := current_date + INTERVAL '1 day';
+    date_cursor := date_cursor + 1;
   END LOOP;
 
   RETURN jsonb_build_object(
