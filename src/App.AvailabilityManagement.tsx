@@ -37,8 +37,8 @@ import { RecurringPatternManager } from './components/availability/RecurringPatt
 import { TimeSlotSelector } from './components/availability/TimeSlotSelector';
 import { CalendarViewMode } from './types/availability';
 
-// Mock data
-import { mockRootProps, mockCalendarData, mockRecurringPatterns, mockBookings, mockPrivacySettings } from './availabilityMockData';
+// Import availability services
+import { AvailabilityService } from './services/availabilityService';
 
 // Create QueryClient
 const queryClient = new QueryClient({
@@ -76,6 +76,15 @@ const AvailabilityManagementApp: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [bulkEditorOpen, setBulkEditorOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Initialize real-time service
+  React.useEffect(() => {
+    AvailabilityService.initializeRealtime();
+    
+    return () => {
+      AvailabilityService.disconnectRealtime();
+    };
+  }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);

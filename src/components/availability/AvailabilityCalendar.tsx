@@ -22,9 +22,9 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import { useAvailabilityStore } from '../../store/availabilityStore';
-import { useCalendarEntries } from '../../hooks/useAvailability';
+import { useCalendarEntries, useCurrentUser } from '../../hooks/useAvailability';
 import { formatAvailabilityStatus } from '../../utils/availabilityFormatters';
-import { AvailabilityStatus, CalendarViewMode, TimeSlot } from '../../types/availability';
+import { AvailabilityStatus, CalendarViewMode, TimeSlot, CalendarEntry } from '../../types/availability';
 import { TimeSlotSelector } from './TimeSlotSelector';
 
 const CalendarContainer = styled(Paper)(({ theme }) => ({
@@ -110,27 +110,54 @@ const StatusIndicator = styled(Box)<{ status: AvailabilityStatus }>(({ theme, st
 }));
 
 interface AvailabilityCalendarProps {
-  onDateSelect?: (date: Date) => void;
+  calendarEntries?: CalendarEntry[];
+  selectedDates?: Date[];
+  currentViewDate?: Date;
+  viewMode?: CalendarViewMode;
+  operatingHours?: { start: string; end: string };
+  onDateSelect?: (dates: Date[]) => void;
+  onViewModeChange?: (mode: CalendarViewMode) => void;
+  onNavigate?: (direction: 'prev' | 'next') => void;
+  onAvailabilityUpdate?: (dates: Date[], timeSlots: TimeSlot[]) => void;
   onTimeSlotSelect?: (date: Date, timeSlots: TimeSlot[]) => void;
+  loading?: boolean;
 }
 
 export const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
+  calendarEntries: propCalendarEntries,
+  selectedDates: propSelectedDates,
+  currentViewDate: propCurrentViewDate,
+  viewMode: propViewMode,
+  operatingHours,
   onDateSelect,
-  onTimeSlotSelect
+  onViewModeChange,
+  onNavigate,
+  onAvailabilityUpdate,
+  onTimeSlotSelect,
+  loading
 }) => {
   const {
-    currentViewDate,
+    currentViewDate: storeCurrentViewDate,
     setCurrentViewDate,
-    viewMode,
+    viewMode: storeViewMode,
     setViewMode,
-    selectedDates,
+    selectedDates: storeSelectedDates,
     setSelectedDates
   } = useAvailabilityStore();
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlotDialogOpen, setTimeSlotDialogOpen] = useState(false);
 
-  const { data: calendarEntries = [] } = useCalendarEntries('user_123');
+  // Get current user
+  const { data: currentUser } = useCurrentUser();
+  const userId = currentUser?.id;
+
+  // Use props if provided, otherwise fall back to store
+  const currentViewDate = propCurrentViewDate || storeCurrentViewDate;
+  const viewMode = propViewMode || storeViewMode;
+  const selectedDates = propSelectedDates || storeSelectedDates;
+  const { data: fallbackCalendarEntries = [] } = useCalendarEntries(userId || '');
+  const calendarEntries = propCalendarEntries || fallbackCalendarEntries;
 
   const today = new Date();
   const currentMonth = currentViewDate.getMonth();
@@ -173,27 +200,42 @@ export const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     
-    if (isDateSelected(date)) {
-      setSelectedDates(selectedDates.filter(d => d.toDateString() !== date.toDateString()));
+    const newSelectedDates = isDateSelected(date)
+      ? selectedDates.filter(d => d.toDateString() !== date.toDateString())
+      : [...selectedDates, date];
+    
+    if (onDateSelect) {
+      onDateSelect(newSelectedDates);
     } else {
-      setSelectedDates([...selectedDates, date]);
+      setSelectedDates(newSelectedDates);
     }
     
-    onDateSelect?.(date);
     setTimeSlotDialogOpen(true);
   };
 
   const handlePrevMonth = () => {
-    setCurrentViewDate(new Date(currentYear, currentMonth - 1, 1));
+    if (onNavigate) {
+      onNavigate('prev');
+    } else {
+      setCurrentViewDate(new Date(currentYear, currentMonth - 1, 1));
+    }
   };
 
   const handleNextMonth = () => {
-    setCurrentViewDate(new Date(currentYear, currentMonth + 1, 1));
+    if (onNavigate) {
+      onNavigate('next');
+    } else {
+      setCurrentViewDate(new Date(currentYear, currentMonth + 1, 1));
+    }
   };
 
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: CalendarViewMode | null) => {
     if (newMode !== null) {
-      setViewMode(newMode);
+      if (onViewModeChange) {
+        onViewModeChange(newMode);
+      } else {
+        setViewMode(newMode);
+      }
     }
   };
 
@@ -322,6 +364,9 @@ export const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
               date={selectedDate}
               onTimeSlotSelect={(timeSlots) => {
                 onTimeSlotSelect?.(selectedDate, timeSlots);
+                if (onAvailabilityUpdate && selectedDate) {
+                  onAvailabilityUpdate([selectedDate], timeSlots);
+                }
               }}
             />
           )}

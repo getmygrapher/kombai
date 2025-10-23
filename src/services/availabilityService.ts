@@ -880,27 +880,6 @@ export class AvailabilityService {
     return availabilityRealtimeService.on('conflict_detected', handler);
   }
 
-  // Enhanced pattern operations using the dedicated service
-  static async createRecurringPattern(pattern: Omit<RecurringPattern, 'id' | 'createdAt' | 'updatedAt'>): Promise<RecurringPattern> {
-    return RecurringPatternService.createPattern(pattern);
-  }
-
-  static async updateRecurringPattern(patternId: string, updates: Partial<RecurringPattern>): Promise<RecurringPattern> {
-    return RecurringPatternService.updatePattern(patternId, updates);
-  }
-
-  static async deleteRecurringPattern(patternId: string): Promise<void> {
-    return RecurringPatternService.deletePattern(patternId);
-  }
-
-  static async previewRecurringPattern(pattern: RecurringPattern, dateRange: DateRange): Promise<any> {
-    return RecurringPatternService.previewPattern(pattern, dateRange);
-  }
-
-  static async getPatternTemplates(): Promise<any[]> {
-    return RecurringPatternService.getPatternTemplates();
-  }
-
   // Bulk operations for better performance
   static async bulkUpdateAvailability(entries: Partial<CalendarEntry>[]): Promise<{
     success: boolean;
