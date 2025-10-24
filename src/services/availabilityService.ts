@@ -76,18 +76,18 @@ export class AvailabilityService {
         date: availability.date,
         status: availability.status,
         is_recurring: availability.isRecurring || false,
-        recurring_pattern_id: availability.recurringPatternId || '',
-        notes: availability.notes || '',
+        recurring_pattern_id: availability.recurringPatternId || null,
+        notes: availability.notes || null,
         time_slots: (availability.timeSlots || []).map(slot => ({
           start_time: slot.start,
           end_time: slot.end,
           status: slot.status,
           is_booked: slot.isBooked || false,
-          job_id: slot.jobId || '',
-          job_title: slot.jobTitle || '',
-          client_name: slot.clientName || '',
-          rate_per_hour: slot.ratePerHour?.toString() || '',
-          notes: slot.notes || ''
+          job_id: slot.jobId || null,
+          job_title: slot.jobTitle || null,
+          client_name: slot.clientName || null,
+          rate_per_hour: slot.ratePerHour ? slot.ratePerHour.toString() : null,
+          notes: slot.notes || null
         }))
       }];
 
@@ -99,7 +99,7 @@ export class AvailabilityService {
 
       // Return updated availability entry
       return {
-        id: availability.id || 'new_cal_id',
+        id: availability.id || data?.id || 'new_cal_id',
         userId: uid,
         date: availability.date || new Date().toISOString().split('T')[0],
         status: availability.status || 'available' as any,
@@ -122,23 +122,31 @@ export class AvailabilityService {
       const uid = await getCurrentUserId();
       const dateStr = date.toISOString().split('T')[0];
       
+      // Determine status based on time slots
+      let status = 'available';
+      if (timeSlots.length === 0) {
+        status = 'unavailable';
+      } else if (timeSlots.some(slot => slot.isBooked)) {
+        status = timeSlots.every(slot => slot.isBooked) ? 'booked' : 'partial';
+      }
+      
       // Use bulk update with single date
       const availabilityData = [{
         date: dateStr,
-        status: 'available',
+        status: status,
         is_recurring: false,
-        recurring_pattern_id: '',
-        notes: '',
+        recurring_pattern_id: null,
+        notes: null,
         time_slots: timeSlots.map(slot => ({
           start_time: slot.start,
           end_time: slot.end,
           status: slot.status,
           is_booked: slot.isBooked || false,
-          job_id: slot.jobId || '',
-          job_title: slot.jobTitle || '',
-          client_name: slot.clientName || '',
-          rate_per_hour: slot.ratePerHour?.toString() || '',
-          notes: slot.notes || ''
+          job_id: slot.jobId || null,
+          job_title: slot.jobTitle || null,
+          client_name: slot.clientName || null,
+          rate_per_hour: slot.ratePerHour ? slot.ratePerHour.toString() : null,
+          notes: slot.notes || null
         }))
       }];
 
@@ -892,18 +900,18 @@ export class AvailabilityService {
         date: entry.date,
         status: entry.status,
         is_recurring: entry.isRecurring || false,
-        recurring_pattern_id: entry.recurringPatternId || '',
-        notes: entry.notes || '',
+        recurring_pattern_id: entry.recurringPatternId || null,
+        notes: entry.notes || null,
         time_slots: (entry.timeSlots || []).map(slot => ({
           start_time: slot.start,
           end_time: slot.end,
           status: slot.status,
           is_booked: slot.isBooked || false,
-          job_id: slot.jobId || '',
-          job_title: slot.jobTitle || '',
-          client_name: slot.clientName || '',
-          rate_per_hour: slot.ratePerHour?.toString() || '',
-          notes: slot.notes || ''
+          job_id: slot.jobId || null,
+          job_title: slot.jobTitle || null,
+          client_name: slot.clientName || null,
+          rate_per_hour: slot.ratePerHour ? slot.ratePerHour.toString() : null,
+          notes: slot.notes || null
         }))
       }));
 
@@ -914,9 +922,9 @@ export class AvailabilityService {
       if (error) throw mapError(error);
 
       return {
-        success: data.success,
-        entriesCreated: data.entries_created || 0,
-        slotsCreated: data.slots_created || 0,
+        success: data?.success ?? true,
+        entriesCreated: data?.entries_created || 0,
+        slotsCreated: data?.slots_created || 0,
         errors: []
       };
     } catch (error) {
