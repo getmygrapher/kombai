@@ -8,14 +8,15 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Divider,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAvailabilityStore } from '../../store/availabilityStore';
-import { useUpdateAvailability } from '../../hooks/useAvailability';
+import { useUpdateAvailability, useCurrentUser } from '../../hooks/useAvailability';
 import { formatTimeSlot } from '../../utils/availabilityFormatters';
 import { 
   TimeSlot, 
@@ -73,11 +74,13 @@ const QuickActionButton = styled(Button)(({ theme }) => ({
 interface TimeSlotSelectorProps {
   date: Date;
   onTimeSlotSelect?: (timeSlots: TimeSlot[]) => void;
+  onSaveComplete?: () => void;
 }
 
 export const TimeSlotSelector: React.FC<TimeSlotSelectorProps> = ({
   date,
-  onTimeSlotSelect
+  onTimeSlotSelect,
+  onSaveComplete
 }) => {
   const {
     selectedTimeSlots,
@@ -88,8 +91,11 @@ export const TimeSlotSelector: React.FC<TimeSlotSelectorProps> = ({
   const [granularity, setGranularity] = useState<SlotGranularity>(SlotGranularity.ONE_HOUR);
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<AvailabilityStatus>(AvailabilityStatus.AVAILABLE);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const updateAvailabilityMutation = useUpdateAvailability();
+  const { data: currentUser } = useCurrentUser();
 
   // Generate time slots based on operating hours and granularity
   useEffect(() => {
@@ -185,16 +191,30 @@ export const TimeSlotSelector: React.FC<TimeSlotSelectorProps> = ({
 
   const handleSaveAvailability = async () => {
     try {
+      const userId = currentUser?.id;
+      
+      if (!userId) {
+        setErrorMessage('No authenticated user found. Please log in again.');
+        return;
+      }
+      
       await updateAvailabilityMutation.mutateAsync({
-        userId: 'user_123',
+        userId,
         date: date.toISOString().split('T')[0],
         timeSlots: selectedTimeSlots,
         status: selectedTimeSlots.length > 0 ? selectedTimeSlots[0].status : AvailabilityStatus.UNAVAILABLE
       });
       
+      setSuccessMessage('Availability saved successfully!');
       onTimeSlotSelect?.(selectedTimeSlots);
+      
+      // Close dialog after a short delay to show success message
+      setTimeout(() => {
+        onSaveComplete?.();
+      }, 1000);
     } catch (error) {
       console.error('Failed to save availability:', error);
+      setErrorMessage(`Failed to save availability: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -330,6 +350,30 @@ export const TimeSlotSelector: React.FC<TimeSlotSelectorProps> = ({
           {updateAvailabilityMutation.isPending ? 'Saving...' : 'Save Availability'}
         </Button>
       </Box>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={!!errorMessage}
+        autoHideDuration={6000}
+        onClose={() => setErrorMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => setErrorMessage(null)}>
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

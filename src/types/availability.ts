@@ -73,7 +73,8 @@ export interface TimeSlot {
   bookingId?: string;
   jobTitle?: string;
   jobId?: string;
-  rate?: number;
+  clientName?: string;
+  ratePerHour?: number;
   notes?: string;
 }
 

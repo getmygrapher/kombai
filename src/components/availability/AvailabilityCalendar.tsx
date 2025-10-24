@@ -156,7 +156,23 @@ export const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
   const currentViewDate = propCurrentViewDate || storeCurrentViewDate;
   const viewMode = propViewMode || storeViewMode;
   const selectedDates = propSelectedDates || storeSelectedDates;
-  const { data: fallbackCalendarEntries = [] } = useCalendarEntries(userId || '');
+  
+  // Calculate date range for current month view (with buffer for better UX)
+  const dateRange = React.useMemo(() => {
+    const startOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1);
+    const endOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0);
+    
+    // Add buffer days before and after to show previous/next month dates that appear in calendar
+    const start = new Date(startOfMonth);
+    start.setDate(start.getDate() - 7); // Week before
+    
+    const end = new Date(endOfMonth);
+    end.setDate(end.getDate() + 7); // Week after
+    
+    return { start, end };
+  }, [currentViewDate]);
+  
+  const { data: fallbackCalendarEntries = [] } = useCalendarEntries(userId || '', dateRange);
   const calendarEntries = propCalendarEntries || fallbackCalendarEntries;
 
   const today = new Date();
@@ -368,6 +384,7 @@ export const AvailabilityCalendar: React.FC<AvailabilityCalendarProps> = ({
                   onAvailabilityUpdate([selectedDate], timeSlots);
                 }
               }}
+              onSaveComplete={() => setTimeSlotDialogOpen(false)}
             />
           )}
         </DialogContent>

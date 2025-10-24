@@ -83,8 +83,23 @@ export const AvailabilityManagement: React.FC = () => {
   const { data: currentUser, isLoading: userLoading, error: userError } = useCurrentUser();
   const userId = currentUser?.id;
 
+  // Calculate date range for current month view (with buffer for better UX)
+  const dateRange = React.useMemo(() => {
+    const startOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), 1);
+    const endOfMonth = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth() + 1, 0);
+    
+    // Add buffer days before and after to show previous/next month dates that appear in calendar
+    const start = new Date(startOfMonth);
+    start.setDate(start.getDate() - 7); // Week before
+    
+    const end = new Date(endOfMonth);
+    end.setDate(end.getDate() + 7); // Week after
+    
+    return { start, end };
+  }, [currentViewDate]);
+
   // API hooks
-  const { data: calendarEntries = [], isLoading: calendarLoading, error: calendarError } = useCalendarEntries(userId || '');
+  const { data: calendarEntries = [], isLoading: calendarLoading, error: calendarError } = useCalendarEntries(userId || '', dateRange);
   const { data: recurringPatterns = [], isLoading: patternsLoading } = useRecurringPatterns(userId || '');
   const updateAvailabilityMutation = useUpdateAvailability();
 
@@ -109,7 +124,7 @@ export const AvailabilityManagement: React.FC = () => {
       for (const date of dates) {
         await updateAvailabilityMutation.mutateAsync({
           userId,
-          date: date.toISOString(),
+          date: date.toISOString().split('T')[0],
           timeSlots,
           status: timeSlots.length > 0 ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.UNAVAILABLE,
         });
