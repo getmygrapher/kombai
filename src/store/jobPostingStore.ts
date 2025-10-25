@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Job } from '../types';
+import { jobsService } from '../services/jobsService';
 
 interface JobPostingStore {
   currentJob: Partial<Job> | null;
@@ -34,7 +35,7 @@ export const useJobPostingStore = create<JobPostingStore>()(
 
       setJobData: (data) => {
         const currentJob = get().currentJob;
-        const updatedJob = { ...currentJob, ...data };
+        const updatedJob = { ...(currentJob || {}), ...data };
         set({ currentJob: updatedJob });
         
         // Auto-save draft
@@ -90,52 +91,13 @@ export const useJobPostingStore = create<JobPostingStore>()(
         set({ isSubmitting: true, errors: {} });
 
         try {
-          // TODO: Replace with actual API call
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Mock successful submission
-          const submittedJob: Job = {
-            id: `job-${Date.now()}`,
-            title: currentJob.title || '',
-            type: currentJob.type || 'PHOTOGRAPHY' as any,
-            professionalTypesNeeded: currentJob.professionalTypesNeeded || [],
-            date: currentJob.date || '',
-            timeSlots: currentJob.timeSlots || [],
-            location: currentJob.location || {
-              city: '',
-              state: '',
-              coordinates: { lat: 0, lng: 0 }
-            },
-            budgetRange: currentJob.budgetRange || {
-              min: 0,
-              max: 0,
-              currency: 'INR',
-              type: 'FIXED' as any,
-              isNegotiable: false
-            },
-            description: currentJob.description || '',
-            urgency: currentJob.urgency || 'NORMAL' as any,
-            postedBy: {
-              id: 'current-user',
-              name: 'Current User',
-              rating: 4.5,
-              totalJobs: 1
-            },
-            applicants: [],
-            status: 'ACTIVE' as any,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-            isExpired: false,
-            viewCount: 0
-          };
-
+          const { job, success, message } = await jobsService.createJob(currentJob);
           // Clear draft after successful submission
           localStorage.removeItem('job-draft');
           get().resetForm();
 
           set({ isSubmitting: false });
-          return { success: true, job: submittedJob };
+          return { success, job };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to submit job';
           set({ 

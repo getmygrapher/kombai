@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { Job, JobFilters, JobSortOption } from '../types';
-import { mockJobs } from '../data/jobPostingMockData';
-import { sortJobsByDistance, filterJobsByRadius, getCurrentLocation, getDefaultLocation } from '../utils/locationUtils';
+import { Job, JobFilters, JobSortOption, DistanceRadius } from '../types';
+
+import { jobsService } from '../services/jobsService';
+import { getCurrentLocation, getDefaultLocation } from '../utils/locationUtils';
 
 interface JobDiscoveryStore {
   jobs: Job[];
@@ -33,16 +34,27 @@ const defaultFilters: JobFilters = {
 };
 
 // Helper function to convert distance filter to kilometers
-const getRadiusFromFilter = (distance: string): number => {
-  const radiusMap: Record<string, number> = {
-    'FIVE_KM': 5,
-    'TEN_KM': 10,
-    'TWENTY_FIVE_KM': 25,
-    'FIFTY_KM': 50,
-    'HUNDRED_KM': 100,
-    'FIVE_HUNDRED_KM': 500
+// const getRadiusFromFilter = (distance: string): number => {
+//   const radiusMap: Record<string, number> = {
+//     'FIVE_KM': 5,
+//     'TEN_KM': 10,
+//     'TWENTY_FIVE_KM': 25,
+//     'FIFTY_KM': 50,
+//     'HUNDRED_KM': 100,
+//     'FIVE_HUNDRED_KM': 500
+//   };
+//   return radiusMap[distance] || 25;
+// };
+
+const toDistanceEnum = (distance: string): DistanceRadius => {
+  const map: Record<string, DistanceRadius> = {
+    'FIVE_KM': DistanceRadius.FIVE_KM,
+    'TEN_KM': DistanceRadius.TEN_KM,
+    'TWENTY_FIVE_KM': DistanceRadius.TWENTY_FIVE_KM,
+    'FIFTY_KM': DistanceRadius.FIFTY_KM,
+    'HUNDRED_KM': DistanceRadius.HUNDRED_PLUS_KM
   };
-  return radiusMap[distance] || 25;
+  return map[distance] || DistanceRadius.TWENTY_FIVE_KM;
 };
 
 export const useJobDiscoveryStore = create<JobDiscoveryStore>((set, get) => ({
@@ -90,76 +102,67 @@ export const useJobDiscoveryStore = create<JobDiscoveryStore>((set, get) => ({
         }
       }
 
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock implementation - filter and sort jobs
-      let filteredJobs = [...mockJobs];
+      // Fetch jobs from backend using filters/search
       const { filters, searchQuery, sortBy, userLocation: currentLocation } = get();
-      
-      // Apply search query
-      if (searchQuery) {
-        filteredJobs = filteredJobs.filter(job => 
-          job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          job.description.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+
+      let fetchedJobs: Job[] = [];
+      if (searchQuery && searchQuery.trim().length > 0) {
+        const { jobs } = await jobsService.searchJobs(searchQuery, { categories: filters.categories, dateRange: filters.dateRange });
+        fetchedJobs = jobs;
+      } else if (currentLocation) {
+        const radiusEnum = toDistanceEnum((filters.distance as unknown as string));
+        const { jobs } = await jobsService.getNearbyJobs(currentLocation, radiusEnum, filters);
+        fetchedJobs = jobs;
       }
-      
-      // Apply category filters
-      if (filters.categories.length > 0) {
-        filteredJobs = filteredJobs.filter(job => 
-          filters.categories.includes(job.type)
-        );
-      }
-      
-      // Apply urgency filters
-      if (filters.urgency.length > 0) {
-        filteredJobs = filteredJobs.filter(job => 
-          filters.urgency.includes(job.urgency)
-        );
-      }
-      
-      // Apply budget filters
-      filteredJobs = filteredJobs.filter(job => 
-        job.budgetRange.min >= filters.budgetRange.min &&
-        job.budgetRange.max <= filters.budgetRange.max
-      );
-      
-      // Apply distance filtering and sorting
-      if (currentLocation) {
-        // Filter by distance radius
-        const radiusKm = getRadiusFromFilter(filters.distance);
-        filteredJobs = filterJobsByRadius(filteredJobs, currentLocation, radiusKm);
-        
-        // Sort by distance first, then apply other sorting
-        filteredJobs = sortJobsByDistance(filteredJobs, currentLocation);
-      }
-      
-      // Apply additional sorting
-      switch (sortBy) {
+
+      // Optional sorting
+      const sortKey = sortBy as unknown as string;
+      switch (sortKey) {
         case 'DATE': {
-          filteredJobs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          fetchedJobs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           break;
         }
         case 'BUDGET': {
-          filteredJobs.sort((a, b) => b.budgetRange.max - a.budgetRange.max);
+          fetchedJobs.sort((a, b) => (b.budgetRange?.max || 0) - (a.budgetRange?.max || 0));
           break;
         }
         case 'URGENCY': {
-          const urgencyOrder = { 'EMERGENCY': 3, 'URGENT': 2, 'NORMAL': 1 } as const;
-          filteredJobs.sort((a, b) => 
-            (urgencyOrder[b.urgency as keyof typeof urgencyOrder] || 0) - (urgencyOrder[a.urgency as keyof typeof urgencyOrder] || 0)
-          );
+          const urgencyOrder: Record<string, number> = { 'Emergency': 3, 'Urgent': 2, 'Normal': 1 };
+          fetchedJobs.sort((a, b) => (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0));
           break;
         }
-        // DISTANCE is already handled above
+        case 'DISTANCE': {
+          fetchedJobs.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+          break;
+        }
+        case 'date_posted': {
+          fetchedJobs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          break;
+        }
+        case 'budget_high_to_low': {
+          fetchedJobs.sort((a, b) => (b.budgetRange?.max || 0) - (a.budgetRange?.max || 0));
+          break;
+        }
+        case 'budget_low_to_high': {
+          fetchedJobs.sort((a, b) => (a.budgetRange?.max || 0) - (b.budgetRange?.max || 0));
+          break;
+        }
+        case 'urgency': {
+          const urgencyOrder: Record<string, number> = { 'Emergency': 3, 'Urgent': 2, 'Normal': 1 };
+          fetchedJobs.sort((a, b) => (urgencyOrder[b.urgency] || 0) - (urgencyOrder[a.urgency] || 0));
+          break;
+        }
+        case 'distance': {
+          fetchedJobs.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+          break;
+        }
       }
-      
+
       set({ 
-        jobs: filteredJobs, 
+        jobs: fetchedJobs, 
         isLoading: false, 
         currentPage: 1,
-        hasMore: filteredJobs.length > 0 
+        hasMore: fetchedJobs.length > 0 
       });
     } catch (error) {
       set({ isLoading: false });

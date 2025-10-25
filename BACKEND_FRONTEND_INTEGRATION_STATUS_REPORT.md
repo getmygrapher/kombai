@@ -117,29 +117,28 @@ However, **critical backend implementations are missing** for the remaining core
 
 ### ❌ **Not Implemented (5 Critical Systems)**
 
-#### 4. Job Posting & Discovery System (0% Backend)
-**Status:** Frontend 60% complete, **ZERO backend implementation**
+#### 4. Job Posting & Discovery System (Backend: schema ready, API wiring ongoing)
+**Status:** Frontend 60% complete; backend schema authored; integration in progress
 
-**Missing Backend Components:**
-- ❌ No database tables (`jobs`, `job_applications`, `job_categories`)
-- ❌ No search/filter RPC functions
-- ❌ No proximity-based search algorithms
-- ❌ No job-professional matching logic
-- ❌ No application management system
-- ❌ No job analytics & tracking
+**Backend Progress:**
+- ✅ Database schema authored in `supabase/sql/job_schema.sql` (`jobs`, `job_applications`, indexes, RLS)
+- ⚠️ RPC functions planned (`create_job`, `get_nearby_jobs`, `search_jobs`, `apply_to_job`, `get_job_applications`, `update_application_status`, `get_my_jobs`) — implementation pending
+- ⚠️ Supabase migration application pending (schema not yet deployed)
 
-**Frontend Ready:**
-- ✅ Job creation wizard (4 steps)
+**Frontend Integration:**
+- ✅ Job creation wizard UI
 - ✅ Job feed & discovery UI
 - ✅ Job detail views
 - ✅ Application flow UI
 - ✅ Job management dashboard
-- ⚠️ All using mock data currently
+- ✅ Hooks and stores now call `jobsService` (create, get, nearby, search, apply, update status)
+- ✅ Replaced mock data in `src/store/jobStore.ts`, `src/store/jobPostingStore.ts`, `src/store/jobDiscoveryStore.ts`, and preview `src/App.JobSystem.tsx`
+- ⚠️ Requires backend responses to fully function
 
 **Critical Impact:** 
-- Cannot post or browse real jobs
-- No professional-client matching
-- Cannot generate revenue (core feature blocked)
+- Real jobs load once Supabase schema and RPCs are applied
+- Professional-client matching unlocks after proximity RPCs
+- Revenue path unblocks with job posting live
 
 #### 5. Community Posing Library (0% Backend)
 **Status:** Frontend 75% complete, **ZERO backend implementation**

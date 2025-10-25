@@ -10,7 +10,9 @@ import { JobFeedPage } from './pages/jobs/JobFeedPage';
 import { FilterModal } from './components/jobs/FilterModal';
 import { ActiveFiltersChips } from './components/jobs/ActiveFiltersChips';
 import { JobCard } from './components/jobs/JobCard';
-import { mockJobs } from './data/jobPostingMockData';
+import { useNearbyJobs } from './hooks/useJobs';
+import { DistanceRadius } from './types';
+import { getDefaultLocation } from './utils/locationUtils';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -32,6 +34,8 @@ const JobSystemPreview: React.FC = () => {
     distance: 'TWENTY_FIVE_KM' as any,
     dateRange: { start: '', end: '' }
   });
+  const defaultLocation = getDefaultLocation();
+  const { data: nearbyData, isLoading: nearbyLoading } = useNearbyJobs(defaultLocation, DistanceRadius.TWENTY_FIVE_KM);
 
   const handleJobDetails = (jobId: string) => {
     console.log('View job details:', jobId);
@@ -165,7 +169,10 @@ const JobSystemPreview: React.FC = () => {
                   Job Cards
                 </Typography>
                 <Stack spacing={2}>
-                  {mockJobs.slice(0, 2).map((job) => (
+                  {nearbyLoading && (
+                    <Typography variant="body2" color="text.secondary">Loading jobs…</Typography>
+                  )}
+                  {nearbyData?.jobs?.slice(0, 2).map((job) => (
                     <JobCard
                       key={job.id}
                       job={job}

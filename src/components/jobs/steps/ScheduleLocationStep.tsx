@@ -39,12 +39,15 @@ export const ScheduleLocationStep: React.FC<ScheduleLocationStepProps> = ({
 
   const { control, watch, setValue, formState: { errors: formErrors, isValid } } = form;
 
-  // Watch form values and update parent
+  // Watch form values for UI only
   const watchedValues = watch();
   
   useEffect(() => {
-    onChange(watchedValues);
-  }, [watchedValues, onChange]);
+    const subscription = form.watch((values) => {
+      onChange(values as Partial<Job>);
+    });
+    return () => subscription.unsubscribe();
+  }, [form, onChange]);
 
   // Notify parent about validation state
   useEffect(() => {
